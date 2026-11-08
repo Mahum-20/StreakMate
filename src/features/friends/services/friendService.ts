@@ -1,0 +1,197 @@
+import {
+  collection,
+  doc,
+  setDoc,
+  getDoc,
+  onSnapshot,
+  query,
+  where,
+  serverTimestamp,
+  Timestamp,
+  Unsubscribe,
+} from 'firebase/firestore';
+import { db } from '@/core/config/firebase';
+
+export interface UserSearchResult {
+  uid: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+}
+
+export interface FriendRequest {
+  id: string;
+  fromUid: string;
+  toUid: string;
+  fromDisplayName: string;
+  fromUsername: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
+  createdAt: Timestamp | null;
+}
+
+export interface Friendship {
+  id: string;
+  participantUids: string[];
+  participantData?: Record<string, { displayName: string; username: string; avatarUrl: string | null }>;
+  establishedAt: Timestamp | null;
+  activeStreakCount: number;
+}
+
+export const friendService = {
+  /**
+   * Searches for an exact username in the usernames index collection.
+   */
+  async searchUserByUsername(username: string): Promise<UserSearchResult | null> {
+    const clean = username.trim().toLowerCase().replace('@', '');
+    if (!clean) return null;
+
+    const usernameDoc = await getDoc(doc(db, 'usernames', clean));
+    if (!usernameDoc.exists()) {
+      return null;
+    }
+
+    const uid = usernameDoc.data().uid;
+    const userDoc = await getDoc(doc(db, 'users', uid));
+    if (!userDoc.exists()) {
+      return null;
+    }
+
+    const userData = userDoc.data();
+    return {
+      uid,
+      displayName: userData.displayName || 'StreakMate User',
+      username: userData.username || clean,
+      avatarUrl: userData.avatarUrl || null,
+    };
+  },
+
+  /**
+   * Sends a friend request to a target user.
+   */
+  async sendFriendRequest(params: {
+    fromUid: string;
+    fromDisplayName: string;
+    fromUsername: string;
+    toUid: string;
+  }): Promise<void> {
+    const requestId = `${params.fromUid}_${params.toUid}`;
+    const requestRef = doc(db, 'friendRequests', requestId);
+
+    await setDoc(requestRef, {
+      id: requestId,
+      fromUid: params.fromUid,
+      toUid: params.toUid,
+      fromDisplayName: params.fromDisplayName,
+      fromUsername: params.fromUsername,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  /**
+   * Subscribes in real-time to incoming pending friend requests.
+   */
+  subscribeToIncomingRequests(
+    userId: string,
+    onUpdate: (requests: FriendRequest[]) => void
+  ): Unsubscribe {
+    const requestsRef = collection(db, 'friendRequests');
+    const q = query(
+      requestsRef,
+      where('toUid', '==', userId),
+      where('status', '==', 'pending')
+    );
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const requests: FriendRequest[] = snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            fromUid: data.fromUid,
+            toUid: data.toUid,
+            fromDisplayName: data.fromDisplayName || 'Friend',
+            fromUsername: data.fromUsername || '',
+            status: data.status,
+            createdAt: data.createdAt || null,
+          };
+        });
+        onUpdate(requests);
+      },
+      (err) => console.warn('subscribeToIncomingRequests error:', err)
+    );
+  },
+
+  /**
+   * Accepts an incoming friend request and creates the mutual friendship document.
+   */
+  async acceptFriendRequest(request: FriendRequest, currentUser: { displayName: string; username: string }): Promise<void> {
+    // 1. Mark request accepted
+    const reqRef = doc(db, 'friendRequests', request.id);
+    await setDoc(reqRef, { status: 'accepted', updatedAt: serverTimestamp() }, { merge: true });
+
+    // 2. Create friendship document with deterministic sorted ID
+    const sorted = [request.fromUid, request.toUid].sort();
+    const friendshipId = `${sorted[0]}_${sorted[1]}`;
+    const friendshipRef = doc(db, 'friendships', friendshipId);
+
+    await setDoc(friendshipRef, {
+      id: friendshipId,
+      participantUids: [request.fromUid, request.toUid],
+      participantData: {
+        [request.fromUid]: {
+          displayName: request.fromDisplayName,
+          username: request.fromUsername,
+          avatarUrl: null,
+        },
+        [request.toUid]: {
+          displayName: currentUser.displayName,
+          username: currentUser.username,
+          avatarUrl: null,
+        },
+      },
+      activeStreakCount: 0,
+      establishedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  /**
+   * Declines a friend request.
+   */
+  async declineFriendRequest(requestId: string): Promise<void> {
+    const reqRef = doc(db, 'friendRequests', requestId);
+    await setDoc(reqRef, { status: 'rejected', updatedAt: serverTimestamp() }, { merge: true });
+  },
+
+  /**
+   * Subscribes to all active friendships for the user.
+   */
+  subscribeToFriendships(
+    userId: string,
+    onUpdate: (friendships: Friendship[]) => void
+  ): Unsubscribe {
+    const friendshipsRef = collection(db, 'friendships');
+    const q = query(friendshipsRef, where('participantUids', 'array-contains', userId));
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const friendships: Friendship[] = snapshot.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            participantUids: data.participantUids || [],
+            participantData: data.participantData || {},
+            establishedAt: data.establishedAt || null,
+            activeStreakCount: data.activeStreakCount || 0,
+          };
+        });
+        onUpdate(friendships);
+      },
+      (err) => console.warn('subscribeToFriendships error:', err)
+    );
+  },
+};
