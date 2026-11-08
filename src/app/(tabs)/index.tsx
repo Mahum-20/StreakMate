@@ -218,11 +218,8 @@ export default function HomeScreen() {
             size={46}
           />
           <View style={{ marginLeft: spacing.md }}>
-            <Text style={[typography.microLabel, { color: skyConfig.accent, marginBottom: 2 }]}>
-              {skyConfig.label.toUpperCase()}
-            </Text>
             <Text style={[typography.title2, { color: skyConfig.textPrimary, fontWeight: '700' }]} numberOfLines={1}>
-              {skyConfig.greeting}, {user?.displayName || 'Traveler'}
+              {user?.displayName || 'StreakMate'}
             </Text>
           </View>
         </TouchableOpacity>

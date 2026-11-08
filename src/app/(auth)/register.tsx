@@ -122,11 +122,8 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerSection}>
-            <Text style={[typography.microLabel, { color: skyConfig.accent, marginBottom: 4 }]}>
-              {skyConfig.label.toUpperCase()}
-            </Text>
             <Text style={[typography.editorialTitle, { color: skyConfig.textPrimary }]}>
-              Join the Living Sky
+              Create Account
             </Text>
             <Text style={[typography.bodyMedium, { color: skyConfig.textSecondary, marginTop: spacing.xs }]}>
               Build lifelong habits and accountability with friends

@@ -63,7 +63,7 @@ export interface SkyConfiguration {
 export const SKY_CONFIGURATIONS: Record<SkyPhase, SkyConfiguration> = {
   morning: {
     phase: 'morning',
-    label: 'Morning (5:00 AM – 10:59 AM)',
+    label: 'Morning',
     isDarkContent: true,
     imageAsset: SKY_BACKGROUND_IMAGES.morning,
     skyGradient: ['#38BDF8', '#7DD3FC', '#BAE6FD', '#FEF3C7'],
@@ -100,7 +100,7 @@ export const SKY_CONFIGURATIONS: Record<SkyPhase, SkyConfiguration> = {
   },
   afternoon: {
     phase: 'afternoon',
-    label: 'Afternoon (11:00 AM – 3:59 PM)',
+    label: 'Afternoon',
     isDarkContent: true,
     imageAsset: SKY_BACKGROUND_IMAGES.afternoon,
     skyGradient: ['#0369A1', '#0284C7', '#38BDF8', '#BAE6FD'], // Rich deep azure afternoon sky
@@ -137,7 +137,7 @@ export const SKY_CONFIGURATIONS: Record<SkyPhase, SkyConfiguration> = {
   },
   golden_hour: {
     phase: 'golden_hour',
-    label: 'Golden Hour (4:00 PM – 5:59 PM)',
+    label: 'Golden Hour',
     isDarkContent: true,
     imageAsset: SKY_BACKGROUND_IMAGES.golden_hour,
     skyGradient: ['#F97316', '#FB923C', '#F472B6', '#FEF3C7'],
@@ -174,7 +174,7 @@ export const SKY_CONFIGURATIONS: Record<SkyPhase, SkyConfiguration> = {
   },
   twilight: {
     phase: 'twilight',
-    label: 'Twilight (6:00 PM – 7:59 PM)',
+    label: 'Twilight',
     isDarkContent: false,
     imageAsset: SKY_BACKGROUND_IMAGES.twilight,
     skyGradient: ['#0A1128', '#101C42', '#1C2A5C', '#283870'],
@@ -211,7 +211,7 @@ export const SKY_CONFIGURATIONS: Record<SkyPhase, SkyConfiguration> = {
   },
   night: {
     phase: 'night',
-    label: 'Night (8:00 PM – 4:59 AM)',
+    label: 'Night',
     isDarkContent: false,
     imageAsset: SKY_BACKGROUND_IMAGES.night,
     skyGradient: ['#050814', '#0A0E27', '#0F1738', '#161F4D'],

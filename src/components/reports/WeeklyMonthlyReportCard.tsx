@@ -121,7 +121,7 @@ export const WeeklyMonthlyReportCard: React.FC<WeeklyMonthlyReportCardProps> = (
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={[typography.microLabel, styles.tagline]}>
-              ✦ {skyConfig ? skyConfig.label.toUpperCase() : 'LIVING SKY ENVIRONMENT'}
+              ✦ CONSISTENCY & PROGRESS
             </Text>
             <Text style={[typography.editorialTitle, styles.headerTitle]}>
               {activeTab === 'daily'

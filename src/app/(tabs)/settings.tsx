@@ -102,12 +102,12 @@ export default function SettingsScreen() {
   };
 
   const skyOptions: { key: SkyModePreference; label: string; subtitle: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-    { key: 'auto', label: 'Automatic', subtitle: 'Follows local device time & timezone', icon: 'time-outline' },
-    { key: 'morning', label: 'Morning', subtitle: '5:00 AM – 10:59 AM · Soft Blue & Gentle Sun', icon: 'sunny-outline' },
-    { key: 'afternoon', label: 'Afternoon', subtitle: '11:00 AM – 3:59 PM · Luminous Azure & Bright Clouds', icon: 'partly-sunny-outline' },
-    { key: 'golden_hour', label: 'Golden Hour', subtitle: '4:00 PM – 5:59 PM · Warm Amber, Peach & Pink Sunset', icon: 'flame-outline' },
-    { key: 'twilight', label: 'Twilight', subtitle: '6:00 PM – 7:59 PM · Dusk Lavender & Emerging Stars', icon: 'planet-outline' },
-    { key: 'night', label: 'Night', subtitle: '8:00 PM – 4:59 AM · Midnight Navy, Stars & Moon', icon: 'moon-outline' },
+    { key: 'auto', label: 'Automatic', subtitle: 'Dynamic atmosphere based on your local sky', icon: 'time-outline' },
+    { key: 'morning', label: 'Morning', subtitle: 'Soft blue dawn sky & gentle sunrise', icon: 'sunny-outline' },
+    { key: 'afternoon', label: 'Afternoon', subtitle: 'Luminous azure sky & sunlit clouds', icon: 'partly-sunny-outline' },
+    { key: 'golden_hour', label: 'Golden Hour', subtitle: 'Warm amber, peach & pink sunset', icon: 'flame-outline' },
+    { key: 'twilight', label: 'Twilight', subtitle: 'Dusk lavender atmosphere & early stars', icon: 'planet-outline' },
+    { key: 'night', label: 'Night', subtitle: 'Midnight navy sky, starlight & moon', icon: 'moon-outline' },
   ];
 
   const textPrimary = skyConfig.textPrimary;

@@ -75,9 +75,6 @@ export default function ForgotPasswordScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerSection}>
-            <Text style={[typography.microLabel, { color: skyConfig.accent, marginBottom: 4 }]}>
-              {skyConfig.label.toUpperCase()}
-            </Text>
             <Text style={[typography.editorialTitle, { color: skyConfig.textPrimary }]}>Reset Password</Text>
             <Text style={[typography.bodyMedium, { color: skyConfig.textSecondary, marginTop: spacing.xs }]}>
               Enter the email associated with your account and we will send you a secure recovery link.

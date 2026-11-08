@@ -90,11 +90,8 @@ export default function LoginScreen() {
                 color={skyConfig.accent}
               />
             </View>
-            <Text style={[typography.microLabel, { color: skyConfig.accent, marginTop: spacing.sm }]}>
-              {skyConfig.label.toUpperCase()}
-            </Text>
-            <Text style={[typography.editorialTitle, { color: skyConfig.textPrimary, marginTop: 4, textAlign: 'center' }]}>
-              {skyConfig.greeting}
+            <Text style={[typography.editorialTitle, { color: skyConfig.textPrimary, marginTop: spacing.md, textAlign: 'center' }]}>
+              Welcome Back
             </Text>
             <Text
               style={[
@@ -102,7 +99,7 @@ export default function LoginScreen() {
                 { color: skyConfig.textSecondary, marginTop: spacing.xs, textAlign: 'center' },
               ]}
             >
-              Sign in to continue your living rhythm
+              Sign in to continue your habit streaks
             </Text>
           </View>
 

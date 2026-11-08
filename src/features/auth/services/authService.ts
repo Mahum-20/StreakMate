@@ -7,9 +7,21 @@ import {
   updateProfile,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithCredential,
+  User,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/core/config/firebase';
+
+let GoogleSignin: any = null;
+let statusCodes: any = null;
+try {
+  const gSignin = require('@react-native-google-signin/google-signin');
+  GoogleSignin = gSignin.GoogleSignin;
+  statusCodes = gSignin.statusCodes;
+} catch {
+  // Optional in non-native or test environments
+}
 
 export interface RegisterParams {
   email: string;
@@ -104,20 +116,7 @@ export const authService = {
     return user;
   },
 
-  async loginWithGoogle() {
-    if (Platform.OS !== 'web' || typeof signInWithPopup !== 'function') {
-      throw new Error(
-        'Google Sign-In on mobile requires an installable build (APK) with native Google Play Services. For instant testing in Expo Go, please use Email and Password, or test Google Sign-In directly in your PC browser at http://localhost:8081!'
-      );
-    }
-
-    const provider = new GoogleAuthProvider();
-    provider.addScope('profile');
-    provider.addScope('email');
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-
-    // Check if user already exists in Firestore; if not, create initial profile!
+  async syncUserToFirestore(user: User) {
     try {
       const userRef = doc(db, 'users', user.uid);
       const userSnap = await getDoc(userRef);
@@ -148,6 +147,51 @@ export const authService = {
     }
 
     return user;
+  },
+
+  async loginWithGoogle() {
+    if (Platform.OS === 'web') {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('profile');
+      provider.addScope('email');
+      const result = await signInWithPopup(auth, provider);
+      return this.syncUserToFirestore(result.user);
+    }
+
+    // Native mobile (Android APK / iOS)
+    if (!GoogleSignin) {
+      throw new Error('Google Sign-In is unavailable on this device.');
+    }
+
+    try {
+      GoogleSignin.configure({
+        webClientId: '311704121872-cg9e9os8keov35f5m8epkkj6m1pkdc3c.apps.googleusercontent.com',
+      });
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const signInResult = await GoogleSignin.signIn();
+
+      if (signInResult.type === 'cancelled') {
+        throw new Error('Google sign-in was cancelled.');
+      }
+
+      const idToken = signInResult.data?.idToken || (signInResult as any).idToken;
+      if (!idToken) {
+        throw new Error('Google Sign-In did not return an ID token. Please try again.');
+      }
+
+      const credential = GoogleAuthProvider.credential(idToken);
+      const userCredential = await signInWithCredential(auth, credential);
+      return this.syncUserToFirestore(userCredential.user);
+    } catch (error: any) {
+      if (statusCodes && error?.code === statusCodes.SIGN_IN_CANCELLED) {
+        throw new Error('Google sign-in was cancelled.');
+      } else if (statusCodes && error?.code === statusCodes.IN_PROGRESS) {
+        throw new Error('Google sign-in is already in progress.');
+      } else if (statusCodes && error?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        throw new Error('Google Play Services is not available or needs updating on this device.');
+      }
+      throw error;
+    }
   },
 
   async resetPassword(email: string) {
