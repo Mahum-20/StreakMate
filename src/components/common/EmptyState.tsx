@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/core/theme';
 import { useSky } from '@/core/environment/SkyContext';
@@ -11,6 +11,8 @@ export interface EmptyStateProps {
   description: string;
   actionTitle?: string;
   onActionPress?: () => void;
+  actionStyle?: ViewStyle;
+  actionTextStyle?: TextStyle;
   style?: ViewStyle;
 }
 
@@ -20,6 +22,8 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   description,
   actionTitle,
   onActionPress,
+  actionStyle,
+  actionTextStyle,
   style,
 }) => {
   const { colors, typography, spacing, borderRadius } = useTheme();
@@ -75,7 +79,14 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       </Text>
 
       {actionTitle && onActionPress && (
-        <Button title={actionTitle} onPress={onActionPress} variant="primary" size="md" />
+        <Button
+          title={actionTitle}
+          onPress={onActionPress}
+          variant="primary"
+          size="md"
+          style={actionStyle}
+          textStyle={actionTextStyle}
+        />
       )}
     </View>
   );

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Alert } from 'react-native';
 import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -116,11 +116,21 @@ function RootNavigator() {
 
       const match = url.match(/checkin\/([a-zA-Z0-9_-]+)/);
       if (match && match[1]) {
-        const streakId = match[1];
+        let streakId = match[1];
         const currentUid = auth.currentUser?.uid;
         if (!currentUid) {
           Alert.alert('StreakMate', 'Please sign in to complete your widget check-in.');
           return;
+        }
+
+        if (streakId === 'quick') {
+          const pinnedId = await widgetService.getPinnedStreakId();
+          if (pinnedId) {
+            streakId = pinnedId;
+          } else {
+            router.push('/widget');
+            return;
+          }
         }
 
         const res = await widgetService.quickCheckIn(streakId, currentUid);

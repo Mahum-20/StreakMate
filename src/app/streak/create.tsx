@@ -558,7 +558,7 @@ export default function CreateStreakModal() {
           <Card
             style={{
               marginBottom: spacing.xl,
-              padding: spacing.sm,
+              padding: spacing.md,
               backgroundColor: isDaytime ? 'rgba(255, 255, 255, 0.94)' : 'rgba(15, 23, 42, 0.75)',
               borderColor: isDaytime ? 'rgba(15, 23, 42, 0.14)' : 'rgba(255, 255, 255, 0.20)',
               borderWidth: 1.5,
@@ -571,6 +571,7 @@ export default function CreateStreakModal() {
                   <TouchableOpacity
                     key={hours}
                     onPress={() => setReminderLead(hours)}
+                    activeOpacity={0.75}
                     style={[
                       styles.leadOption,
                       {
@@ -585,25 +586,46 @@ export default function CreateStreakModal() {
                           ? '#E2E8F0'
                           : 'transparent',
                         borderWidth: 1.5,
-                        borderRadius: borderRadius.sm,
-                        paddingVertical: spacing.sm,
+                        borderRadius: 12,
+                        paddingVertical: 12,
+                        paddingHorizontal: 8,
+                        minHeight: 54,
                       },
                     ]}
                   >
                     <Text
                       style={[
-                        typography.caption,
+                        typography.headline,
                         {
                           color: isSelected
                             ? '#FFFFFF'
                             : isDaytime
                             ? '#0F172A'
                             : '#E2E8F0',
-                          fontWeight: isSelected ? '700' : '600',
+                          fontSize: 15,
+                          fontWeight: '700',
+                          textAlign: 'center',
                         },
                       ]}
                     >
-                      {hours} {hours === 1 ? 'Hour' : 'Hours'} Before
+                      {hours} {hours === 1 ? 'Hour' : 'Hours'}
+                    </Text>
+                    <Text
+                      style={[
+                        typography.caption,
+                        {
+                          color: isSelected
+                            ? 'rgba(255, 255, 255, 0.85)'
+                            : isDaytime
+                            ? '#64748B'
+                            : '#94A3B8',
+                          fontSize: 11,
+                          marginTop: 3,
+                          textAlign: 'center',
+                        },
+                      ]}
+                    >
+                      before
                     </Text>
                   </TouchableOpacity>
                 );
