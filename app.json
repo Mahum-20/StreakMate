@@ -7,6 +7,11 @@
     "icon": "./assets/icon.png",
     "scheme": "streakmate",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
     "android": {
       "package": "com.streakmate.app",
       "adaptiveIcon": {
@@ -48,7 +53,15 @@
           }
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0F172A",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
