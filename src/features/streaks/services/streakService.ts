@@ -12,7 +12,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '@/core/config/firebase';
-import { calculatePeriodKey } from '@/core/utils/streakLogic';
+import { calculatePeriodKey, getEndOfDay } from '@/core/utils/streakLogic';
 
 export interface StreakData {
   id: string;
@@ -65,8 +65,7 @@ export const streakService = {
     const periodKey = calculatePeriodKey(now, tz);
 
     // Standard period: ends at midnight (23:59:59) in the creator's timezone
-    const periodEnd = new Date(now);
-    periodEnd.setHours(23, 59, 59, 999);
+    const periodEnd = getEndOfDay(now);
 
     const isSolo = Boolean(input.isSolo || !input.friendUid);
     const participantUids = isSolo || !input.friendUid
@@ -230,10 +229,33 @@ export const streakService = {
       }
 
       const data = streakSnap.data();
-      const currentCheckIns: string[] = data.currentPeriodCheckIns || [];
       const participants: string[] = data.participantUids || [];
+      const now = new Date();
+      const tz = data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const todayKey = calculatePeriodKey(now, tz);
+      const isNewDay = Boolean(data.currentPeriodKey && data.currentPeriodKey !== todayKey);
 
-      // Idempotency: User already checked in
+      // On a new day, start fresh check-ins for the new calendar day
+      let currentCheckIns: string[] = isNewDay ? [] : (data.currentPeriodCheckIns || []);
+      let baseStreak = data.currentStreak || 0;
+
+      // Handle rollover from previous day
+      if (isNewDay) {
+        const prevCheckIns: string[] = data.currentPeriodCheckIns || [];
+        const prevAllDone = participants.length > 0 && participants.every((p) => prevCheckIns.includes(p));
+        if (!prevAllDone && baseStreak > 0) {
+          // If yesterday was missed, check if freeze buffer can protect the streak
+          if ((data.freezesRemaining ?? 0) > 0) {
+            transaction.update(streakRef, {
+              freezesRemaining: (data.freezesRemaining ?? 1) - 1,
+            });
+          } else {
+            baseStreak = 0; // Streak reset if missed without freeze
+          }
+        }
+      }
+
+      // Idempotency: User already checked in for today
       if (currentCheckIns.includes(userId)) {
         const allDone = participants.every((p) => currentCheckIns.includes(p));
         return { success: true, allCompleted: allDone };
@@ -241,35 +263,36 @@ export const streakService = {
 
       const newCheckIns = [...currentCheckIns, userId];
       const allCompleted = participants.length > 0 && participants.every((p) => newCheckIns.includes(p));
-
-      const newStreakCount = allCompleted ? (data.currentStreak || 0) + 1 : (data.currentStreak || 0);
+      const newStreakCount = allCompleted ? baseStreak + 1 : baseStreak;
       const newLongest = Math.max(data.longestStreak || 0, newStreakCount);
+      const periodEnd = getEndOfDay(now);
 
-      const periodKey = data.currentPeriodKey || calculatePeriodKey(new Date(), data.timezone);
-
-      // 1. Write immutable receipt document
-      const receiptRef = doc(db, 'streaks', streakId, 'checkIns', `${periodKey}_${userId}`);
+      // 1. Write immutable receipt document for today's check-in
+      const receiptRef = doc(db, 'streaks', streakId, 'checkIns', `${todayKey}_${userId}`);
       transaction.set(receiptRef, {
-        checkInId: `${periodKey}_${userId}`,
+        checkInId: `${todayKey}_${userId}`,
         streakId,
         userId,
-        periodKey,
+        periodKey: todayKey,
         checkInTime: serverTimestamp(),
       });
 
-      // 2. Update streak status
+      // 2. Update streak status to today's period
       transaction.update(streakRef, {
+        currentPeriodKey: todayKey,
         currentPeriodCheckIns: newCheckIns,
+        currentPeriodEnd: Timestamp.fromDate(periodEnd),
         currentStreak: newStreakCount,
         longestStreak: newLongest,
+        status: 'active',
         updatedAt: serverTimestamp(),
       });
 
       // 3. If all completed, log to history
       if (allCompleted) {
-        const historyRef = doc(db, 'streaks', streakId, 'history', periodKey);
+        const historyRef = doc(db, 'streaks', streakId, 'history', todayKey);
         transaction.set(historyRef, {
-          periodKey,
+          periodKey: todayKey,
           completed: true,
           checkedInUids: newCheckIns,
           finalStreakCount: newStreakCount,

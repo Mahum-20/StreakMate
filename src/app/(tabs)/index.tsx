@@ -21,6 +21,7 @@ import { ConfettiCelebration } from '@/components/motion/ConfettiCelebration';
 import { LivingSkyBackground } from '@/components/motion/LivingSkyBackground';
 import { streakService, StreakData } from '@/features/streaks/services/streakService';
 import { nudgeService, NudgeRecord } from '@/features/streaks/services/nudgeService';
+import { calculatePeriodKey, getEndOfDay } from '@/core/utils/streakLogic';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -138,14 +139,19 @@ export default function HomeScreen() {
     const friendName = isSolo ? 'Solo Habit' : (streak.participantNames?.[friendUid] || 'Friend');
     const friendAvatar = isSolo ? null : (streak.participantAvatars ? streak.participantAvatars[friendUid] : null);
 
-    const userCheckedIn = user?.uid ? streak.currentPeriodCheckIns.includes(user.uid) : false;
-    const friendCheckedIn = isSolo ? true : (friendUid ? streak.currentPeriodCheckIns.includes(friendUid) : false);
+    const tz = streak.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const todayKey = calculatePeriodKey(new Date(), tz);
+    const isCurrentDay = streak.currentPeriodKey === todayKey;
 
-    let hoursRemaining = 24;
-    if (streak.currentPeriodEnd) {
-      const diffMs = streak.currentPeriodEnd.toMillis() - Date.now();
-      hoursRemaining = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
-    }
+    // Only count check-ins that occurred during TODAY's calendar period!
+    const activeCheckIns = isCurrentDay ? (streak.currentPeriodCheckIns || []) : [];
+    const userCheckedIn = user?.uid ? activeCheckIns.includes(user.uid) : false;
+    const friendCheckedIn = isSolo ? true : (friendUid ? activeCheckIns.includes(friendUid) : false);
+
+    // End of day is always 23:59:59 of today in the user's timezone!
+    const now = Date.now();
+    const endOfDayMillis = getEndOfDay(new Date()).getTime();
+    const hoursRemaining = Math.max(0, Math.floor((endOfDayMillis - now) / (1000 * 60 * 60)));
 
     return {
       isSolo,
@@ -176,9 +182,12 @@ export default function HomeScreen() {
   }, [streaks]);
 
   const savedTodayCount = useMemo(() => {
-    return streaks.filter(
-      (s) => s.currentPeriodCheckIns.length >= s.participantUids.length && s.participantUids.length > 0
-    ).length;
+    return streaks.filter((s) => {
+      const tz = s.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const todayKey = calculatePeriodKey(new Date(), tz);
+      if (s.currentPeriodKey !== todayKey) return false;
+      return s.currentPeriodCheckIns.length >= s.participantUids.length && s.participantUids.length > 0;
+    }).length;
   }, [streaks]);
 
   const longestRecord = useMemo(() => {

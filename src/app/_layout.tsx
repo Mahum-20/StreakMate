@@ -171,7 +171,7 @@ function RootNavigator() {
           }}
         />
         <Stack.Screen
-          name="widget/index"
+          name="widget"
           options={{
             headerShown: false,
             presentation: 'card',

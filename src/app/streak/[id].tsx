@@ -19,6 +19,7 @@ import { streakService, StreakData } from '@/features/streaks/services/streakSer
 import { nudgeService } from '@/features/streaks/services/nudgeService';
 import { ConfettiCelebration } from '@/components/motion/ConfettiCelebration';
 import { LivingSkyBackground } from '@/components/motion/LivingSkyBackground';
+import { calculatePeriodKey, getEndOfDay } from '@/core/utils/streakLogic';
 
 export default function StreakDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -73,15 +74,18 @@ export default function StreakDetailScreen() {
   const friendName = (streak && streak.participantNames && streak.participantNames[friendUid]) || 'Friend';
   const friendAvatarUrl = streak?.participantAvatars?.[friendUid] || null;
 
-  const userCheckedIn = Boolean(user && streak?.currentPeriodCheckIns?.includes(user.uid));
-  const friendCheckedIn = Boolean(friendUid && streak?.currentPeriodCheckIns?.includes(friendUid));
+  const tz = streak?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const todayKey = calculatePeriodKey(new Date(), tz);
+  const isCurrentDay = streak?.currentPeriodKey === todayKey;
+
+  const activeCheckIns = isCurrentDay ? (streak?.currentPeriodCheckIns || []) : [];
+  const userCheckedIn = Boolean(user && activeCheckIns.includes(user.uid));
+  const friendCheckedIn = Boolean(friendUid && activeCheckIns.includes(friendUid));
 
   // Compute hours remaining until midnight in streak timezone
-  let hoursRemaining = 24;
-  if (streak?.currentPeriodEnd) {
-    const endMs = streak.currentPeriodEnd.toMillis();
-    hoursRemaining = Math.max(0, Math.floor((endMs - Date.now()) / (1000 * 60 * 60)));
-  }
+  const now = Date.now();
+  const endOfDayMillis = getEndOfDay(new Date()).getTime();
+  const hoursRemaining = Math.max(0, Math.floor((endOfDayMillis - now) / (1000 * 60 * 60)));
 
   const createdAtFormatted = streak?.createdAt
     ? streak.createdAt.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })

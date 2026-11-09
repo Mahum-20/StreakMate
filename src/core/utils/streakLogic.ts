@@ -26,6 +26,28 @@ export function calculatePeriodKey(date: Date, timezone: string = 'UTC'): string
   }
 }
 
+/**
+ * Returns the precise end of the calendar day (23:59:59.999) for the given date.
+ */
+export function getEndOfDay(date: Date = new Date()): Date {
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
+/**
+ * Checks if a streak's stored period key matches the current calendar day in the given timezone.
+ */
+export function isStreakPeriodCurrent(
+  periodKey: string | undefined | null,
+  timezone: string = 'UTC',
+  now: Date = new Date()
+): boolean {
+  if (!periodKey) return false;
+  const todayKey = calculatePeriodKey(now, timezone);
+  return periodKey === todayKey;
+}
+
 export function calculateCheckInState(
   participantUids: string[],
   currentCheckIns: string[],

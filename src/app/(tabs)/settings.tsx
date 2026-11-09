@@ -301,7 +301,7 @@ export default function SettingsScreen() {
           <TouchableOpacity
             style={styles.settingItem}
             activeOpacity={0.7}
-            onPress={() => router.push('/widget/index' as any)}
+            onPress={() => router.push('/widget')}
           >
             <View
               style={{

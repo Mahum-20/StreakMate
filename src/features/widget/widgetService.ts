@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { streakService, StreakData } from '@/features/streaks/services/streakService';
+import { calculatePeriodKey, getEndOfDay } from '@/core/utils/streakLogic';
 
 const WIDGET_PINNED_STREAK_KEY = '@streakmate/pinned_widget_streak_id';
 
@@ -53,14 +54,17 @@ export const widgetService = {
     const friendUid = streak.participantUids?.find((uid) => uid !== userId) || '';
     const friendName = (streak.participantNames && streak.participantNames[friendUid]) || (isSolo ? 'Solo Rhythm' : 'Partner');
 
-    const userCheckedIn = Boolean(streak.currentPeriodCheckIns?.includes(userId));
-    const friendCheckedIn = Boolean(friendUid && streak.currentPeriodCheckIns?.includes(friendUid));
+    const tz = streak.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const todayKey = calculatePeriodKey(new Date(), tz);
+    const isCurrentDay = streak.currentPeriodKey === todayKey;
 
-    let hoursRemaining = 24;
-    if (streak.currentPeriodEnd) {
-      const endMs = streak.currentPeriodEnd.toMillis();
-      hoursRemaining = Math.max(0, Math.floor((endMs - Date.now()) / (1000 * 60 * 60)));
-    }
+    const activeCheckIns = isCurrentDay ? (streak.currentPeriodCheckIns || []) : [];
+    const userCheckedIn = Boolean(activeCheckIns.includes(userId));
+    const friendCheckedIn = Boolean(friendUid && activeCheckIns.includes(friendUid));
+
+    const now = Date.now();
+    const endOfDayMillis = getEndOfDay(new Date()).getTime();
+    const hoursRemaining = Math.max(0, Math.floor((endOfDayMillis - now) / (1000 * 60 * 60)));
 
     return {
       id: streak.id,

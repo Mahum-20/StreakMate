@@ -5,6 +5,8 @@ import {
   calculateNextStreakCount,
   preventDuplicateCheckIn,
   calculatePeriodKey,
+  getEndOfDay,
+  isStreakPeriodCurrent,
 } from '../streakLogic';
 
 describe('Streak Calculation & Lifecycle Logic Engine', () => {
@@ -108,6 +110,22 @@ describe('Streak Calculation & Lifecycle Logic Engine', () => {
       const testDate = new Date('2026-11-06T12:00:00Z');
       const keyUTC = calculatePeriodKey(testDate, 'UTC');
       expect(keyUTC).toBe('2026-11-06');
+    });
+
+    it('correctly calculates end of day at 23:59:59.999', () => {
+      const testDate = new Date('2026-11-08T22:00:00');
+      const end = getEndOfDay(testDate);
+      expect(end.getHours()).toBe(23);
+      expect(end.getMinutes()).toBe(59);
+      expect(end.getSeconds()).toBe(59);
+    });
+
+    it('identifies when a period key is from yesterday vs today', () => {
+      const today = new Date('2026-11-09T08:00:00Z');
+      const yesterdayKey = '2026-11-08';
+      const todayKey = '2026-11-09';
+      expect(isStreakPeriodCurrent(yesterdayKey, 'UTC', today)).toBe(false);
+      expect(isStreakPeriodCurrent(todayKey, 'UTC', today)).toBe(true);
     });
   });
 });
