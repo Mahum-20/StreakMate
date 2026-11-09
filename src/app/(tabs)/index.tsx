@@ -22,6 +22,7 @@ import { LivingSkyBackground } from '@/components/motion/LivingSkyBackground';
 import { streakService, StreakData } from '@/features/streaks/services/streakService';
 import { nudgeService, NudgeRecord } from '@/features/streaks/services/nudgeService';
 import { calculatePeriodKey, getEndOfDay } from '@/core/utils/streakLogic';
+import { getTimeOfDayGreeting } from '@/core/environment/TimeOfDayEngine';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -200,18 +201,27 @@ export default function HomeScreen() {
     return Math.round((SCREEN_WIDTH - 44) / 2.5);
   }, []);
 
+  // Dynamic time-of-day greeting (Good morning, afternoon, evening, night)
+  const timeGreeting = useMemo(() => {
+    return getTimeOfDayGreeting(new Date());
+  }, [skyConfig.phase]);
+
   return (
     <LivingSkyBackground>
-      {/* Top Translucent Floating Header with generous breathing space */}
+      {/* Top Translucent Floating Header showing background sky through */}
       <View
         style={[
           styles.header,
           {
-            paddingTop: Math.max(insets.top, 24) + 16,
+            paddingTop: Math.max(insets.top, 24) + 12,
             paddingHorizontal: spacing.xl,
-            paddingBottom: spacing.lg,
-            backgroundColor: skyConfig.glassSurface,
-            borderBottomColor: skyConfig.glassBorderBottom,
+            paddingBottom: spacing.md,
+            backgroundColor: skyConfig.isDarkContent
+              ? 'rgba(255, 255, 255, 0.28)'
+              : 'rgba(15, 23, 42, 0.35)',
+            borderBottomColor: skyConfig.isDarkContent
+              ? 'rgba(255, 255, 255, 0.35)'
+              : 'rgba(255, 255, 255, 0.12)',
             borderBottomWidth: 1,
           },
         ]}
@@ -227,10 +237,78 @@ export default function HomeScreen() {
             size={46}
           />
           <View style={{ marginLeft: spacing.md }}>
-            <Text style={[typography.title2, { color: skyConfig.textPrimary, fontWeight: '700' }]} numberOfLines={1}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+              <Ionicons
+                name={timeGreeting.icon}
+                size={14}
+                color={skyConfig.isDarkContent ? skyConfig.accent : '#FDE047'}
+                style={{ marginRight: 5 }}
+              />
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    color: skyConfig.isDarkContent ? '#334155' : 'rgba(255, 255, 255, 0.88)',
+                    fontWeight: '600',
+                    fontSize: 13,
+                    letterSpacing: 0.2,
+                  },
+                ]}
+              >
+                {timeGreeting.text}
+              </Text>
+            </View>
+            <Text
+              style={[
+                typography.title2,
+                {
+                  color: skyConfig.textPrimary,
+                  fontWeight: '700',
+                  fontSize: 20,
+                  lineHeight: 24,
+                },
+              ]}
+              numberOfLines={1}
+            >
               {user?.displayName || 'StreakMate'}
             </Text>
           </View>
+        </TouchableOpacity>
+
+        {/* Quick Widget shortcut pill so the top bar is nicely balanced */}
+        <TouchableOpacity
+          style={[
+            styles.headerRightBadge,
+            {
+              backgroundColor: skyConfig.isDarkContent
+                ? 'rgba(255, 255, 255, 0.45)'
+                : 'rgba(255, 255, 255, 0.12)',
+              borderColor: skyConfig.isDarkContent
+                ? 'rgba(255, 255, 255, 0.65)'
+                : 'rgba(255, 255, 255, 0.22)',
+            },
+          ]}
+          onPress={() => router.push('/widget')}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="sparkles"
+            size={14}
+            color={skyConfig.isDarkContent ? skyConfig.accent : '#38BDF8'}
+          />
+          <Text
+            style={[
+              typography.caption,
+              {
+                color: skyConfig.textPrimary,
+                fontWeight: '700',
+                marginLeft: 5,
+                fontSize: 12,
+              },
+            ]}
+          >
+            Widget
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -452,6 +530,15 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+  },
+  headerRightBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   createBtn: {
     flexDirection: 'row',

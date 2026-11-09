@@ -169,7 +169,7 @@ export const SKY_CONFIGURATIONS: Record<SkyPhase, SkyConfiguration> = {
     tabBarBorder: 'rgba(251, 146, 60, 0.30)',
     tabBarActive: '#EA580C',
     tabBarInactive: '#78716C',
-    greeting: 'Golden hour clarity',
+    greeting: 'Good evening',
     subGreeting: 'Golden light reflects your consistency.',
   },
   twilight: {
@@ -243,7 +243,7 @@ export const SKY_CONFIGURATIONS: Record<SkyPhase, SkyConfiguration> = {
     tabBarBorder: 'rgba(56, 189, 248, 0.20)',
     tabBarActive: '#38BDF8',
     tabBarInactive: '#94A3B8',
-    greeting: 'Peaceful night',
+    greeting: 'Good night',
     subGreeting: 'Rest easy. Your consistency is secured.',
   },
 };
@@ -283,4 +283,28 @@ export function resolveSkyConfiguration(
 ): SkyConfiguration {
   const phase = preference === 'auto' ? getAutomaticSkyPhase(currentDate) : preference;
   return SKY_CONFIGURATIONS[phase];
+}
+
+/**
+ * Returns dynamic greeting and icon based on device local time:
+ * - 5:00 AM - 11:59 AM: Good morning
+ * - 12:00 PM - 4:59 PM: Good afternoon
+ * - 5:00 PM - 8:59 PM: Good evening
+ * - 9:00 PM - 4:59 AM: Good night
+ */
+export function getTimeOfDayGreeting(currentDate: Date = new Date()): {
+  text: 'Good morning' | 'Good afternoon' | 'Good evening' | 'Good night';
+  icon: 'sunny-outline' | 'partly-sunny-outline' | 'moon-outline';
+} {
+  const hour = currentDate.getHours();
+  if (hour >= 5 && hour < 12) {
+    return { text: 'Good morning', icon: 'sunny-outline' };
+  }
+  if (hour >= 12 && hour < 17) {
+    return { text: 'Good afternoon', icon: 'partly-sunny-outline' };
+  }
+  if (hour >= 17 && hour < 21) {
+    return { text: 'Good evening', icon: 'partly-sunny-outline' };
+  }
+  return { text: 'Good night', icon: 'moon-outline' };
 }
