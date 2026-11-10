@@ -12,14 +12,14 @@ if not exist "builds" (
 )
 
 echo [1/3] Verifying Expo / EAS authentication...
-echo If you are not signed in, a browser window will open to log in for free.
-echo.
-call npx eas-cli whoami >nul 2>&1
+call npx eas-cli whoami
 if %ERRORLEVEL% neq 0 (
-    echo Please log in to your free Expo account:
+    echo.
+    echo Not authenticated yet. Opening Expo login:
     call npx eas-cli login
 ) else (
-    echo Logged in successfully!
+    echo.
+    echo [OK] Authenticated with EAS!
 )
 
 echo.
@@ -44,7 +44,8 @@ if exist "builds\StreakMate.apk" (
 ) else (
     echo [INFO] Build completed on EAS Cloud!
     echo If download did not auto-place in 'builds', you can download the APK
-    echo directly from the build URL displayed above or from your Expo dashboard.
+    echo directly from the build URL displayed above or from your Expo dashboard:
+    echo https://expo.dev/accounts/mayhem2002/projects/streakmate/builds
 )
 echo ========================================================
 pause
