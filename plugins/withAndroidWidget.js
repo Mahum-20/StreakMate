@@ -72,7 +72,7 @@ const withAndroidWidget = (config) => {
     android:targetCellHeight="2"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/streak_widget_layout"
-    android:previewImage="@drawable/splashscreen_logo"
+    android:previewImage="@mipmap/ic_launcher"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen">
 </appwidget-provider>
@@ -122,7 +122,7 @@ const withAndroidWidget = (config) => {
 `;
       fs.writeFileSync(path.join(drawableDir, 'streak_widget_flame_badge.xml'), flameBadgeXml);
 
-      // 6. streak_widget_layout.xml (Duolingo Style with 1 or 2 Streaks + Checkboxes)
+      // 6. streak_widget_layout.xml (STRICT RemoteViews-compatible classes ONLY: LinearLayout, ImageView, TextView)
       const widgetLayoutXml = `<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_container"
@@ -130,7 +130,10 @@ const withAndroidWidget = (config) => {
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/streak_widget_bg"
-    android:padding="12dp">
+    android:paddingLeft="12dp"
+    android:paddingRight="12dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp">
 
     <!-- Header: Mascot Flame & Cute Speech Bubble -->
     <LinearLayout
@@ -144,15 +147,17 @@ const withAndroidWidget = (config) => {
             android:id="@+id/widget_mascot"
             android:layout_width="28dp"
             android:layout_height="28dp"
-            android:src="@drawable/splashscreen_logo"
-            android:layout_marginEnd="8dp" />
+            android:src="@mipmap/ic_launcher"
+            android:layout_marginRight="8dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/streak_widget_bubble_bg"
-            android:paddingHorizontal="10dp"
-            android:paddingVertical="4dp">
+            android:paddingLeft="10dp"
+            android:paddingRight="10dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp">
 
             <TextView
                 android:id="@+id/widget_speech"
@@ -162,7 +167,8 @@ const withAndroidWidget = (config) => {
                 android:textColor="#FDE047"
                 android:textSize="11sp"
                 android:textStyle="bold"
-                android:singleLine="true" />
+                android:maxLines="1"
+                android:ellipsize="end" />
         </LinearLayout>
     </LinearLayout>
 
@@ -174,7 +180,8 @@ const withAndroidWidget = (config) => {
         android:layout_weight="1"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingVertical="4dp">
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
 
         <TextView
             android:layout_width="wrap_content"
@@ -182,9 +189,11 @@ const withAndroidWidget = (config) => {
             android:background="@drawable/streak_widget_flame_badge"
             android:text="🔥"
             android:textSize="13sp"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="2dp"
-            android:layout_marginEnd="8dp" />
+            android:paddingLeft="6dp"
+            android:paddingRight="6dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:layout_marginRight="8dp" />
 
         <TextView
             android:id="@+id/streak_1_name"
@@ -195,7 +204,8 @@ const withAndroidWidget = (config) => {
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="bold"
-            android:singleLine="true" />
+            android:maxLines="1"
+            android:ellipsize="end" />
 
         <TextView
             android:id="@+id/streak_1_checkbox"
@@ -207,15 +217,16 @@ const withAndroidWidget = (config) => {
             android:textSize="16sp"
             android:textStyle="bold"
             android:gravity="center"
-            android:layout_marginStart="8dp" />
+            android:layout_marginLeft="8dp" />
     </LinearLayout>
 
-    <!-- Divider Line -->
-    <View
+    <!-- Divider Line (Must use ImageView in RemoteViews, bare View is NOT supported) -->
+    <ImageView
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:background="#2C3E48"
-        android:layout_marginVertical="3dp" />
+        android:layout_marginTop="3dp"
+        android:layout_marginBottom="3dp" />
 
     <!-- Streak 2 Row -->
     <LinearLayout
@@ -225,7 +236,8 @@ const withAndroidWidget = (config) => {
         android:layout_weight="1"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingVertical="4dp">
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp">
 
         <TextView
             android:layout_width="wrap_content"
@@ -233,9 +245,11 @@ const withAndroidWidget = (config) => {
             android:background="@drawable/streak_widget_flame_badge"
             android:text="🔥"
             android:textSize="13sp"
-            android:paddingHorizontal="6dp"
-            android:paddingVertical="2dp"
-            android:layout_marginEnd="8dp" />
+            android:paddingLeft="6dp"
+            android:paddingRight="6dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:layout_marginRight="8dp" />
 
         <TextView
             android:id="@+id/streak_2_name"
@@ -246,7 +260,8 @@ const withAndroidWidget = (config) => {
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="bold"
-            android:singleLine="true" />
+            android:maxLines="1"
+            android:ellipsize="end" />
 
         <TextView
             android:id="@+id/streak_2_checkbox"
@@ -258,13 +273,13 @@ const withAndroidWidget = (config) => {
             android:textSize="16sp"
             android:textStyle="bold"
             android:gravity="center"
-            android:layout_marginStart="8dp" />
+            android:layout_marginLeft="8dp" />
     </LinearLayout>
 </LinearLayout>
 `;
       fs.writeFileSync(path.join(layoutDir, 'streak_widget_layout.xml'), widgetLayoutXml);
 
-      // 7. StreakWidgetProvider.kt (Attaches independent check-in intents to both checkboxes)
+      // 7. StreakWidgetProvider.kt
       const providerKt = `package com.streakmate.app
 
 import android.app.PendingIntent
@@ -273,50 +288,58 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.widget.RemoteViews
 
 class StreakWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         for (appWidgetId in appWidgetIds) {
-            val views = RemoteViews(context.packageName, R.layout.streak_widget_layout)
+            try {
+                val views = RemoteViews(context.packageName, R.layout.streak_widget_layout)
 
-            // Open widget manager on widget card tap
-            val openAppIntent = Intent(Intent.ACTION_VIEW, Uri.parse("streakmate://checkin/quick")).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                // Open widget manager on widget card tap
+                val openAppIntent = Intent(Intent.ACTION_VIEW, Uri.parse("streakmate://checkin/quick")).apply {
+                    setPackage(context.packageName)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                val openAppPendingIntent = PendingIntent.getActivity(
+                    context,
+                    0,
+                    openAppIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.widget_container, openAppPendingIntent)
+
+                // Checkbox 1 intent
+                val checkIn1Intent = Intent(Intent.ACTION_VIEW, Uri.parse("streakmate://checkin/quick_1")).apply {
+                    setPackage(context.packageName)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                val checkIn1Pending = PendingIntent.getActivity(
+                    context,
+                    101,
+                    checkIn1Intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.streak_1_checkbox, checkIn1Pending)
+
+                // Checkbox 2 intent
+                val checkIn2Intent = Intent(Intent.ACTION_VIEW, Uri.parse("streakmate://checkin/quick_2")).apply {
+                    setPackage(context.packageName)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                val checkIn2Pending = PendingIntent.getActivity(
+                    context,
+                    102,
+                    checkIn2Intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+                views.setOnClickPendingIntent(R.id.streak_2_checkbox, checkIn2Pending)
+
+                appWidgetManager.updateAppWidget(appWidgetId, views)
+            } catch (e: Exception) {
+                Log.e("StreakWidgetProvider", "Error updating widget", e)
             }
-            val openAppPendingIntent = PendingIntent.getActivity(
-                context,
-                0,
-                openAppIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.widget_container, openAppPendingIntent)
-
-            // Checkbox 1 intent
-            val checkIn1Intent = Intent(Intent.ACTION_VIEW, Uri.parse("streakmate://checkin/quick_1")).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val checkIn1Pending = PendingIntent.getActivity(
-                context,
-                101,
-                checkIn1Intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.streak_1_checkbox, checkIn1Pending)
-
-            // Checkbox 2 intent
-            val checkIn2Intent = Intent(Intent.ACTION_VIEW, Uri.parse("streakmate://checkin/quick_2")).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            val checkIn2Pending = PendingIntent.getActivity(
-                context,
-                102,
-                checkIn2Intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.streak_2_checkbox, checkIn2Pending)
-
-            appWidgetManager.updateAppWidget(appWidgetId, views)
         }
     }
 }
