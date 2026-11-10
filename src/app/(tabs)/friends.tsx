@@ -210,12 +210,12 @@ export default function FriendsScreen() {
             actionTitle="Find Friends"
             onActionPress={() => router.push('/friends/add')}
             actionStyle={{
-              backgroundColor: skyConfig.phase === 'afternoon' ? '#FEF9C3' : skyConfig.accent,
-              borderColor: skyConfig.phase === 'afternoon' ? '#FDE047' : 'transparent',
-              borderWidth: skyConfig.phase === 'afternoon' ? 1.5 : 0,
+              backgroundColor: skyConfig.phase === 'afternoon' ? '#FFFFFF' : skyConfig.accent,
+              borderColor: skyConfig.phase === 'afternoon' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
+              borderWidth: skyConfig.phase === 'afternoon' ? 1 : 0,
               shadowColor: '#000000',
               shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: skyConfig.phase === 'afternoon' ? 0.15 : 0.25,
+              shadowOpacity: skyConfig.phase === 'afternoon' ? 0.12 : 0.25,
               shadowRadius: 8,
               elevation: 4,
             }}
@@ -234,10 +234,10 @@ export default function FriendsScreen() {
         style={[
           styles.fabButton,
           {
-            backgroundColor: skyConfig.phase === 'afternoon' ? '#FEF9C3' : skyConfig.accent,
-            borderColor: skyConfig.phase === 'afternoon' ? '#FDE047' : 'transparent',
-            borderWidth: skyConfig.phase === 'afternoon' ? 1.5 : 0,
-            shadowColor: skyConfig.phase === 'afternoon' ? '#000000' : skyConfig.accent,
+            backgroundColor: skyConfig.phase === 'afternoon' ? '#FFFFFF' : skyConfig.accent,
+            borderColor: skyConfig.phase === 'afternoon' ? 'rgba(0, 0, 0, 0.08)' : 'transparent',
+            borderWidth: skyConfig.phase === 'afternoon' ? 1 : 0,
+            shadowColor: '#000000',
           },
         ]}
         activeOpacity={0.85}

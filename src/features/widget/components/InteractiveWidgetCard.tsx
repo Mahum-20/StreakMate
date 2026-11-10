@@ -5,246 +5,374 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/core/theme';
 import { useSky } from '@/core/environment/SkyContext';
 import { WidgetStreakSnapshot, widgetService } from '../widgetService';
+import { StreakCelebrationModal } from '@/components/modals/StreakCelebrationModal';
 
 interface InteractiveWidgetCardProps {
-  snapshot: WidgetStreakSnapshot | null;
+  snapshots?: WidgetStreakSnapshot[];
+  snapshot?: WidgetStreakSnapshot | null;
   currentUserId: string;
   onCheckInCompleted?: () => void;
   onOpenDetails?: (streakId: string) => void;
 }
 
 export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
+  snapshots,
   snapshot,
   currentUserId,
   onCheckInCompleted,
   onOpenDetails,
 }) => {
-  const { colors, typography, borderRadius, spacing } = useTheme();
+  const { typography } = useTheme();
   const { skyConfig } = useSky();
-  const [checkingIn, setCheckingIn] = useState(false);
-  const [justCheckedIn, setJustCheckedIn] = useState(false);
 
-  if (!snapshot) {
+  // Consolidate single snapshot vs multi snapshots (up to 2)
+  const items: WidgetStreakSnapshot[] = snapshots && snapshots.length > 0
+    ? snapshots.slice(0, 2)
+    : snapshot
+    ? [snapshot]
+    : [];
+
+  const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({});
+  const [checkedMap, setCheckedMap] = useState<Record<string, boolean>>({});
+  const [celebrationStreak, setCelebrationStreak] = useState<{
+    visible: boolean;
+    name: string;
+    count: number;
+  }>({ visible: false, name: '', count: 0 });
+
+  if (items.length === 0) {
     return (
       <View
         style={[
           styles.container,
           {
-            backgroundColor: skyConfig.glassSurface,
-            borderColor: skyConfig.glassBorderTop,
+            backgroundColor: skyConfig.isDarkContent
+              ? 'rgba(255, 255, 255, 0.90)'
+              : 'rgba(15, 23, 42, 0.85)',
+            borderColor: skyConfig.isDarkContent
+              ? 'rgba(255, 255, 255, 0.8)'
+              : 'rgba(255, 255, 255, 0.15)',
           },
         ]}
       >
         <View style={styles.emptyContent}>
-          <Ionicons name="apps-outline" size={32} color={skyConfig.textMuted} />
-          <Text style={[typography.headline, { color: skyConfig.textPrimary, marginTop: 8 }]}>
-            No Active Streak Pinned
+          <View style={styles.emptyMascotCircle}>
+            <Ionicons name="flame" size={36} color="#FF9600" />
+          </View>
+          <Text style={[typography.headline, { color: skyConfig.textPrimary, marginTop: 10 }]}>
+            No Streaks Pinned Yet
           </Text>
           <Text style={[typography.caption, { color: skyConfig.textSecondary, textAlign: 'center', marginTop: 4 }]}>
-            Pin a streak below to enable 1-tap check-ins directly from your home screen widget.
+            Select 1 or 2 habits below to display on your home screen widget with quick checkboxes!
           </Text>
         </View>
       </View>
     );
   }
 
-  const isCheckedIn = snapshot.userCheckedIn || justCheckedIn;
+  const allCompleted = items.every((s) => s.userCheckedIn || checkedMap[s.id]);
 
-  const handleWidgetTap = async () => {
-    if (isCheckedIn || checkingIn) return;
+  const handleCheckIn = async (item: WidgetStreakSnapshot) => {
+    const isDone = item.userCheckedIn || checkedMap[item.id];
+    if (isDone || loadingMap[item.id]) return;
 
-    setCheckingIn(true);
-    const result = await widgetService.quickCheckIn(snapshot.id, currentUserId);
-    setCheckingIn(false);
+    setLoadingMap((prev) => ({ ...prev, [item.id]: true }));
+    const res = await widgetService.quickCheckIn(item.id, currentUserId);
+    setLoadingMap((prev) => ({ ...prev, [item.id]: false }));
 
-    if (result.success) {
-      setJustCheckedIn(true);
-      Alert.alert('Widget Check-In Completed', `Your check-in for "${snapshot.name}" was registered.`);
+    if (res.success) {
+      setCheckedMap((prev) => ({ ...prev, [item.id]: true }));
+      setCelebrationStreak({
+        visible: true,
+        name: item.name,
+        count: res.allCompleted ? item.currentStreak + 1 : item.currentStreak,
+      });
       onCheckInCompleted?.();
-    } else {
-      Alert.alert('Widget Check-In Failed', result.message);
     }
   };
 
   return (
-    <View
-      style={[
-        styles.container,
-        {
-          backgroundColor: skyConfig.glassSurface,
-          borderColor: isCheckedIn ? colors.success : skyConfig.glassBorderTop,
-          borderWidth: 1.5,
-        },
-      ]}
-    >
-      {/* Widget Header bar */}
-      <View style={styles.headerRow}>
-        <View style={styles.brandRow}>
-          <View style={[styles.widgetIconBadge, { backgroundColor: skyConfig.badgeBg }]}>
-            <Ionicons name="flame" size={14} color={skyConfig.accent} />
-          </View>
-          <Text style={[typography.microLabel, { color: skyConfig.textSecondary, letterSpacing: 1.4 }]}>
-            HOME WIDGET
-          </Text>
-        </View>
-
-        <View
-          style={[
-            styles.statusPill,
-            {
-              backgroundColor: isCheckedIn
-                ? colors.successMuted
-                : snapshot.hoursRemaining <= 3
-                ? colors.warningMuted
-                : skyConfig.badgeBg,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              typography.caption,
-              {
-                color: isCheckedIn
-                  ? colors.success
-                  : snapshot.hoursRemaining <= 3
-                  ? colors.warning
-                  : skyConfig.accent,
-                fontWeight: '700',
-                fontSize: 11,
-              },
-            ]}
-          >
-            {isCheckedIn ? 'Checked In' : `${snapshot.hoursRemaining}h left`}
-          </Text>
-        </View>
-      </View>
-
-      {/* Main Content Info */}
-      <TouchableOpacity
-        activeOpacity={0.85}
-        onPress={() => onOpenDetails?.(snapshot.id)}
-        style={styles.contentRow}
-      >
-        <View style={{ flex: 1, paddingRight: spacing.md }}>
-          <Text
-            style={[typography.title2, { color: skyConfig.textPrimary, fontWeight: '700' }]}
-            numberOfLines={1}
-          >
-            {snapshot.name}
-          </Text>
-          <Text style={[typography.caption, { color: skyConfig.textSecondary, marginTop: 2 }]}>
-            {snapshot.isSolo ? 'Solo Rhythm' : `With ${snapshot.friendName}`}
-          </Text>
-        </View>
-
-        {/* Streak Flame Counter */}
-        <View style={styles.flameCounter}>
-          <Text style={[typography.statNumber, { color: skyConfig.accent, fontSize: 32, lineHeight: 36 }]}>
-            {snapshot.currentStreak}
-          </Text>
-          <Text style={[typography.microLabel, { color: skyConfig.textMuted, fontSize: 10 }]}>
-            DAYS
-          </Text>
-        </View>
-      </TouchableOpacity>
-
-      {/* Interactive One-Tap Check-In Button right on the widget */}
-      <TouchableOpacity
-        onPress={handleWidgetTap}
-        disabled={isCheckedIn || checkingIn}
-        activeOpacity={0.8}
+    <>
+      <View
         style={[
-          styles.actionButton,
+          styles.container,
           {
-            backgroundColor: isCheckedIn
-              ? colors.success
-              : skyConfig.accent,
-            borderRadius: borderRadius.md,
+            backgroundColor: skyConfig.isDarkContent
+              ? '#FFFFFF'
+              : '#131F24',
+            borderColor: skyConfig.isDarkContent
+              ? '#E5E5E5'
+              : '#2C3E48',
           },
         ]}
       >
-        {checkingIn ? (
-          <ActivityIndicator size="small" color="#FFFFFF" />
-        ) : isCheckedIn ? (
-          <View style={styles.buttonInner}>
-            <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={[typography.bodyMedium, { color: '#FFFFFF', fontWeight: '700' }]}>Checked In</Text>
+        {/* Top Cute Header: Mascot Mood & Speech Bubble */}
+        <View style={styles.mascotRow}>
+          <View style={styles.mascotBadge}>
+            <Ionicons
+              name={allCompleted ? 'sparkles' : 'flame'}
+              size={22}
+              color={allCompleted ? '#58CC02' : '#FF9600'}
+            />
           </View>
-        ) : (
-          <View style={styles.buttonInner}>
-            <Ionicons name="radio-button-on" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={[typography.bodyMedium, { color: '#FFFFFF', fontWeight: '700' }]}>Tap to Check In Directly</Text>
+
+          {/* Cute Speech Bubble */}
+          <View
+            style={[
+              styles.speechBubble,
+              {
+                backgroundColor: allCompleted
+                  ? '#F0FDF4'
+                  : skyConfig.isDarkContent
+                  ? '#FFFBEB'
+                  : '#202F36',
+                borderColor: allCompleted
+                  ? '#BBF7D0'
+                  : skyConfig.isDarkContent
+                  ? '#FEF08A'
+                  : '#334155',
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.speechText,
+                {
+                  color: allCompleted
+                    ? '#15803D'
+                    : skyConfig.isDarkContent
+                    ? '#B45309'
+                    : '#FDE047',
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {allCompleted
+                ? "Streak safe! You're on fire today! 🔥"
+                : items.length === 1
+                ? "Don't let the flame die today! ⏱️"
+                : "Check off your habits for today! 🎯"}
+            </Text>
           </View>
-        )}
-      </TouchableOpacity>
-    </View>
+        </View>
+
+        {/* Streaks List (1 or 2 rows with checkbox) */}
+        <View style={styles.streaksContainer}>
+          {items.map((item, index) => {
+            const isDone = item.userCheckedIn || checkedMap[item.id];
+            const isLoading = Boolean(loadingMap[item.id]);
+
+            return (
+              <View key={item.id}>
+                {index > 0 && <View style={[styles.itemDivider, { backgroundColor: skyConfig.isDarkContent ? '#F3F4F6' : '#2C3E48' }]} />}
+
+                <View style={styles.streakRow}>
+                  {/* Left: Streak Info */}
+                  <TouchableOpacity
+                    style={styles.streakInfo}
+                    activeOpacity={0.8}
+                    onPress={() => onOpenDetails?.(item.id)}
+                  >
+                    <View style={styles.titleWithFlame}>
+                      <View style={styles.flamePill}>
+                        <Ionicons name="flame" size={13} color="#FF9600" />
+                        <Text style={styles.flameCount}>{item.currentStreak}</Text>
+                      </View>
+                      <Text
+                        style={[
+                          styles.streakTitle,
+                          {
+                            color: skyConfig.isDarkContent ? '#202F36' : '#FFFFFF',
+                            textDecorationLine: isDone ? 'line-through' : 'none',
+                            opacity: isDone ? 0.7 : 1,
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {item.name}
+                      </Text>
+                    </View>
+
+                    <Text
+                      style={[
+                        styles.streakSubtitle,
+                        { color: skyConfig.isDarkContent ? '#777777' : '#9BA9B0' },
+                      ]}
+                    >
+                      {isDone
+                        ? 'Completed today ✓'
+                        : `${item.hoursRemaining}h remaining today`}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Right: Chunky Interactive Checkbox */}
+                  <TouchableOpacity
+                    style={[
+                      styles.checkboxButton,
+                      isDone ? styles.checkboxCompleted : styles.checkboxPending,
+                      {
+                        backgroundColor: isDone ? '#58CC02' : '#F3F4F6',
+                        borderBottomColor: isDone ? '#46A302' : '#E5E7EB',
+                      },
+                    ]}
+                    onPress={() => handleCheckIn(item)}
+                    activeOpacity={0.7}
+                    disabled={isDone || isLoading}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator size="small" color="#58CC02" />
+                    ) : isDone ? (
+                      <Ionicons name="checkmark-sharp" size={20} color="#FFFFFF" />
+                    ) : (
+                      <View style={styles.checkboxInnerHole} />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Celebration Modal on Widget Check-In */}
+      <StreakCelebrationModal
+        visible={celebrationStreak.visible}
+        streakName={celebrationStreak.name}
+        streakCount={celebrationStreak.count}
+        message="Checked in directly from your widget! Streak extended! 🔥"
+        onClose={() => setCelebrationStreak((prev) => ({ ...prev, visible: false }))}
+      />
+    </>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     borderRadius: 22,
+    borderWidth: 2,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.12,
-    shadowRadius: 16,
+    shadowRadius: 12,
     elevation: 4,
   },
   emptyContent: {
-    paddingVertical: 24,
+    paddingVertical: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerRow: {
+  emptyMascotCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFF4E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFE0B2',
+  },
+  mascotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  mascotBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFF4E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFE0B2',
+    marginRight: 10,
+  },
+  speechBubble: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  speechText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  streaksContainer: {
+    width: '100%',
+  },
+  streakRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    paddingVertical: 10,
   },
-  brandRow: {
+  itemDivider: {
+    height: 1,
+    width: '100%',
+    marginVertical: 4,
+  },
+  streakInfo: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  titleWithFlame: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  widgetIconBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 6,
-  },
-  statusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  contentRow: {
+  flamePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+    backgroundColor: '#FFF4E5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
   },
-  flameCounter: {
+  flameCount: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#D97706',
+    marginLeft: 3,
+  },
+  streakTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    flex: 1,
+  },
+  streakSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 3,
+  },
+  checkboxButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 50,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderBottomWidth: 4,
   },
-  actionButton: {
-    height: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  checkboxPending: {
+    borderColor: '#E2E8F0',
   },
-  buttonInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  checkboxCompleted: {
+    borderColor: '#46A302',
+  },
+  checkboxInnerHole: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#CBD5E1',
   },
 });

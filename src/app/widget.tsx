@@ -28,7 +28,7 @@ export default function WidgetScreen() {
   const { user } = useAuthStore();
 
   const [streaks, setStreaks] = useState<StreakData[]>([]);
-  const [pinnedStreakId, setPinnedStreakId] = useState<string | null>(null);
+  const [pinnedStreakIds, setPinnedStreakIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,12 +41,14 @@ export default function WidgetScreen() {
       user.uid,
       async (userStreaks) => {
         setStreaks(userStreaks);
-        const savedPin = await widgetService.getPinnedStreakId();
-        if (savedPin && userStreaks.some((s: StreakData) => s.id === savedPin)) {
-          setPinnedStreakId(savedPin);
+        const savedPins = await widgetService.getPinnedStreakIds();
+        const valid = savedPins.filter((id) => userStreaks.some((s: StreakData) => s.id === id));
+        if (valid.length > 0) {
+          setPinnedStreakIds(valid);
         } else if (userStreaks.length > 0) {
-          setPinnedStreakId(userStreaks[0].id);
-          await widgetService.setPinnedStreakId(userStreaks[0].id);
+          const defaultPins = userStreaks.slice(0, Math.min(2, userStreaks.length)).map((s: StreakData) => s.id);
+          setPinnedStreakIds(defaultPins);
+          await widgetService.setPinnedStreakIds(defaultPins);
         }
         setLoading(false);
       },
@@ -59,15 +61,29 @@ export default function WidgetScreen() {
     return () => unsub();
   }, [user?.uid]);
 
-  const pinnedStreak = streaks.find((s) => s.id === pinnedStreakId) || null;
-  const snapshot: WidgetStreakSnapshot | null = pinnedStreak && user
-    ? widgetService.buildSnapshot(pinnedStreak, user.uid)
-    : null;
+  const snapshots: WidgetStreakSnapshot[] = pinnedStreakIds
+    .map((id) => streaks.find((s) => s.id === id))
+    .filter((s): s is StreakData => Boolean(s && user))
+    .map((s) => widgetService.buildSnapshot(s, user!.uid));
 
-  const handleSelectStreak = async (id: string) => {
-    setPinnedStreakId(id);
-    await widgetService.setPinnedStreakId(id);
-    Alert.alert('Widget Updated', 'This streak is now synced with your Home Screen widget.');
+  const handleToggleStreak = async (id: string) => {
+    let next: string[];
+    if (pinnedStreakIds.includes(id)) {
+      if (pinnedStreakIds.length <= 1) {
+        Alert.alert('Notice', 'At least 1 streak must remain pinned to your widget.');
+        return;
+      }
+      next = pinnedStreakIds.filter((p) => p !== id);
+    } else {
+      if (pinnedStreakIds.length >= 2) {
+        // Shift oldest out to keep max 2 streaks
+        next = [pinnedStreakIds[1], id];
+      } else {
+        next = [...pinnedStreakIds, id];
+      }
+    }
+    setPinnedStreakIds(next);
+    await widgetService.setPinnedStreakIds(next);
   };
 
   return (
@@ -116,16 +132,23 @@ export default function WidgetScreen() {
           <ActivityIndicator size="small" color={skyConfig.accent} style={{ marginVertical: 32 }} />
         ) : (
           <InteractiveWidgetCard
-            snapshot={snapshot}
+            snapshots={snapshots}
             currentUserId={user?.uid || ''}
             onOpenDetails={(id) => router.push(`/streak/${id}`)}
           />
         )}
 
-        {/* Choose Which Streak Is Pinned */}
-        <Text style={[typography.headline, { color: skyConfig.textPrimary, marginTop: spacing.xl, marginBottom: spacing.sm }]}>
-          Select Pinned Streak
-        </Text>
+        {/* Choose 1 or 2 Streaks To Pin */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xl, marginBottom: spacing.sm }}>
+          <Text style={[typography.headline, { color: skyConfig.textPrimary }]}>
+            Select 1 or 2 Streaks
+          </Text>
+          <View style={[styles.pillBadge, { backgroundColor: skyConfig.badgeBg }]}>
+            <Text style={[typography.caption, { color: skyConfig.accent, fontWeight: '700' }]}>
+              {pinnedStreakIds.length} of 2 Selected
+            </Text>
+          </View>
+        </View>
 
         {streaks.length === 0 && !loading && (
           <Card style={{ padding: spacing.lg, alignItems: 'center' }}>
@@ -137,14 +160,14 @@ export default function WidgetScreen() {
         )}
 
         {streaks.map((item) => {
-          const isSelected = item.id === pinnedStreakId;
+          const isSelected = pinnedStreakIds.includes(item.id);
           const isCheckedIn = Boolean(user && item.currentPeriodCheckIns?.includes(user.uid));
 
           return (
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.8}
-              onPress={() => handleSelectStreak(item.id)}
+              onPress={() => handleToggleStreak(item.id)}
             >
               <Card
                 style={[
@@ -201,7 +224,7 @@ export default function WidgetScreen() {
             4. Tap the widget button anytime to complete your daily check-in with 1 click!
           </Text>
 
-          {pinnedStreak && (
+          {pinnedStreakIds.length > 0 && (
             <View style={{ marginTop: 14 }}>
               <Button
                 title="Simulate 1-Tap Home Screen Check-In"
@@ -209,7 +232,7 @@ export default function WidgetScreen() {
                 size="sm"
                 onPress={async () => {
                   if (!user) return;
-                  const res = await widgetService.quickCheckIn(pinnedStreak.id, user.uid);
+                  const res = await widgetService.quickCheckIn(pinnedStreakIds[0], user.uid);
                   Alert.alert(res.success ? 'Success!' : 'Notice', res.message);
                 }}
               />
@@ -258,5 +281,10 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 18,
     borderWidth: 1,
+  },
+  pillBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
 });

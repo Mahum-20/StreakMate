@@ -3,6 +3,7 @@ import { streakService, StreakData } from '@/features/streaks/services/streakSer
 import { calculatePeriodKey, getEndOfDay } from '@/core/utils/streakLogic';
 
 const WIDGET_PINNED_STREAK_KEY = '@streakmate/pinned_widget_streak_id';
+const WIDGET_PINNED_STREAKS_KEY = '@streakmate/pinned_widget_streak_ids';
 
 export interface WidgetStreakSnapshot {
   id: string;
@@ -18,25 +19,53 @@ export interface WidgetStreakSnapshot {
 
 export const widgetService = {
   /**
-   * Retrieves the ID of the streak pinned to the interactive widget.
+   * Retrieves the IDs of the streaks pinned to the interactive widget (up to 2).
    */
-  async getPinnedStreakId(): Promise<string | null> {
+  async getPinnedStreakIds(): Promise<string[]> {
     try {
-      return await AsyncStorage.getItem(WIDGET_PINNED_STREAK_KEY);
+      const raw = await AsyncStorage.getItem(WIDGET_PINNED_STREAKS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.slice(0, 2);
+        }
+      }
+      // Fallback to legacy single key
+      const single = await AsyncStorage.getItem(WIDGET_PINNED_STREAK_KEY);
+      return single ? [single] : [];
     } catch {
-      return null;
+      return [];
     }
   },
 
   /**
-   * Pins a specific streak to the interactive widget.
+   * Pins 1 or 2 specific streaks to the interactive widget.
+   */
+  async setPinnedStreakIds(streakIds: string[]): Promise<void> {
+    try {
+      const limited = streakIds.slice(0, 2);
+      await AsyncStorage.setItem(WIDGET_PINNED_STREAKS_KEY, JSON.stringify(limited));
+      if (limited.length > 0) {
+        await AsyncStorage.setItem(WIDGET_PINNED_STREAK_KEY, limited[0]);
+      }
+    } catch (e) {
+      console.warn('Failed to save pinned widget streak ids:', e);
+    }
+  },
+
+  /**
+   * Legacy helper for retrieving the primary pinned streak ID.
+   */
+  async getPinnedStreakId(): Promise<string | null> {
+    const ids = await this.getPinnedStreakIds();
+    return ids.length > 0 ? ids[0] : null;
+  },
+
+  /**
+   * Legacy helper for setting the primary pinned streak ID.
    */
   async setPinnedStreakId(streakId: string): Promise<void> {
-    try {
-      await AsyncStorage.setItem(WIDGET_PINNED_STREAK_KEY, streakId);
-    } catch (e) {
-      console.warn('Failed to save pinned widget streak id:', e);
-    }
+    await this.setPinnedStreakIds([streakId]);
   },
 
   /**

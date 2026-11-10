@@ -18,6 +18,7 @@ import { Avatar, Card, Badge, Button, EmptyState } from '@/components/common';
 import { streakService, StreakData } from '@/features/streaks/services/streakService';
 import { nudgeService } from '@/features/streaks/services/nudgeService';
 import { ConfettiCelebration } from '@/components/motion/ConfettiCelebration';
+import { StreakCelebrationModal } from '@/components/modals/StreakCelebrationModal';
 import { LivingSkyBackground } from '@/components/motion/LivingSkyBackground';
 import { calculatePeriodKey, getEndOfDay } from '@/core/utils/streakLogic';
 
@@ -35,6 +36,7 @@ export default function StreakDetailScreen() {
   const [nudgedRecently, setNudgedRecently] = useState(false);
   const [sendingNudge, setSendingNudge] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -95,11 +97,9 @@ export default function StreakDetailScreen() {
     if (!streak || !user || checkingIn) return;
     setCheckingIn(true);
     try {
-      const result = await streakService.submitCheckIn(streak.id, user.uid);
+      await streakService.submitCheckIn(streak.id, user.uid);
       setShowConfetti(true);
-      if (result.allCompleted) {
-        Alert.alert('Streak Extended! 🔥', isSolo ? 'You completed today\'s streak!' : 'Both you and your friend have completed check-ins for today!');
-      }
+      setShowCelebration(true);
     } catch (err: any) {
       console.warn('Check-in error:', err);
       Alert.alert('Check-In Failed', err?.message || 'Could not register check-in.');
@@ -421,6 +421,23 @@ export default function StreakDetailScreen() {
         visible={showConfetti}
         onFinish={() => setShowConfetti(false)}
       />
+
+      {/* Themed Celebration Modal on Check-in */}
+      {streak && (
+        <StreakCelebrationModal
+          visible={showCelebration}
+          streakName={streak.name}
+          streakCount={streak.currentStreak}
+          message={
+            isSolo
+              ? "You completed today's streak! Fantastic work maintaining consistency."
+              : streak.currentPeriodCheckIns && streak.currentPeriodCheckIns.length >= streak.participantUids.length - 1
+              ? "Both you and your friend have completed check-ins! Streak extended! 🔥"
+              : "Your check-in is saved! Ping your friend to lock in today's streak."
+          }
+          onClose={() => setShowCelebration(false)}
+        />
+      )}
     </LivingSkyBackground>
   );
 }

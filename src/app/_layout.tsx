@@ -124,9 +124,24 @@ function RootNavigator() {
         }
 
         if (streakId === 'quick') {
-          const pinnedId = await widgetService.getPinnedStreakId();
-          if (pinnedId) {
-            streakId = pinnedId;
+          router.push('/widget');
+          return;
+        }
+
+        if (streakId === 'quick_1') {
+          const pinnedIds = await widgetService.getPinnedStreakIds();
+          if (pinnedIds.length > 0) {
+            streakId = pinnedIds[0];
+          } else {
+            router.push('/widget');
+            return;
+          }
+        } else if (streakId === 'quick_2') {
+          const pinnedIds = await widgetService.getPinnedStreakIds();
+          if (pinnedIds.length > 1) {
+            streakId = pinnedIds[1];
+          } else if (pinnedIds.length === 1) {
+            streakId = pinnedIds[0];
           } else {
             router.push('/widget');
             return;

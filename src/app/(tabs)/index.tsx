@@ -18,6 +18,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Avatar, EmptyState, Card, Button } from '@/components/common';
 import { StreakCard, StatCard } from '@/components/cards';
 import { ConfettiCelebration } from '@/components/motion/ConfettiCelebration';
+import { StreakCelebrationModal } from '@/components/modals/StreakCelebrationModal';
 import { LivingSkyBackground } from '@/components/motion/LivingSkyBackground';
 import { streakService, StreakData } from '@/features/streaks/services/streakService';
 import { nudgeService, NudgeRecord } from '@/features/streaks/services/nudgeService';
@@ -38,6 +39,12 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [celebrationData, setCelebrationData] = useState<{
+    visible: boolean;
+    name: string;
+    count: number;
+    message?: string;
+  }>({ visible: false, name: '', count: 0 });
 
   useEffect(() => {
     if (!user?.uid) {
@@ -126,8 +133,22 @@ export default function HomeScreen() {
   const handleCheckIn = async (streakId: string) => {
     if (!user?.uid) return;
     try {
-      await streakService.submitCheckIn(streakId, user.uid);
+      const result = await streakService.submitCheckIn(streakId, user.uid);
       setShowConfetti(true);
+      const target = streaks.find((s) => s.id === streakId);
+      if (target) {
+        const isSolo = Boolean(target.isSolo || (target.participantUids && target.participantUids.length === 1));
+        setCelebrationData({
+          visible: true,
+          name: target.name,
+          count: result.allCompleted ? target.currentStreak + 1 : target.currentStreak,
+          message: isSolo
+            ? "You completed today's streak! Fantastic work maintaining consistency."
+            : result.allCompleted
+            ? "Both you and your friend have completed check-ins! Streak extended! 🔥"
+            : "Your check-in is saved! Ping your friend to lock in today's streak.",
+        });
+      }
     } catch (err) {
       console.warn('Check-in error:', err);
     }
@@ -513,6 +534,15 @@ export default function HomeScreen() {
       <ConfettiCelebration
         visible={showConfetti}
         onFinish={() => setShowConfetti(false)}
+      />
+
+      {/* Themed Streak Celebration Pop-up Window */}
+      <StreakCelebrationModal
+        visible={celebrationData.visible}
+        streakName={celebrationData.name}
+        streakCount={celebrationData.count}
+        message={celebrationData.message}
+        onClose={() => setCelebrationData((prev) => ({ ...prev, visible: false }))}
       />
     </LivingSkyBackground>
   );
