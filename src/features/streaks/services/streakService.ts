@@ -3,6 +3,7 @@ import {
   doc,
   addDoc,
   setDoc,
+  getDoc,
   onSnapshot,
   query,
   where,
@@ -214,6 +215,46 @@ export const streakService = {
         if (onError) onError(err);
       }
     );
+  },
+
+  /**
+   * Fetches a single streak document once.
+   */
+  async getStreak(streakId: string): Promise<StreakData | null> {
+    try {
+      const snap = await getDoc(doc(db, 'streaks', streakId));
+      if (!snap.exists()) return null;
+      const data = snap.data();
+      return {
+        id: snap.id,
+        name: data.name || 'Streak',
+        description: data.description || null,
+        friendshipId: data.friendshipId,
+        isSolo: data.isSolo,
+        participantUids: data.participantUids || [],
+        participantNames: data.participantNames || {},
+        participantAvatars: data.participantAvatars || {},
+        creatorUid: data.creatorUid || '',
+        currentStreak: data.currentStreak || 0,
+        longestStreak: data.longestStreak || 0,
+        status: data.status || 'active',
+        currentPeriodKey: data.currentPeriodKey || '',
+        currentPeriodStart: data.currentPeriodStart || null,
+        currentPeriodEnd: data.currentPeriodEnd || null,
+        currentPeriodCheckIns: data.currentPeriodCheckIns || [],
+        reminderLeadHours: data.reminderLeadHours || 3,
+        freezesRemaining: data.freezesRemaining ?? 2,
+        timezone: data.timezone || 'UTC',
+        lastNudgeAt: data.lastNudgeAt || null,
+        lastNudgeBy: data.lastNudgeBy || null,
+        lastNudgePhrase: data.lastNudgePhrase || null,
+        createdAt: data.createdAt || null,
+        updatedAt: data.updatedAt || null,
+      };
+    } catch (err) {
+      console.warn('getStreak error:', err);
+      return null;
+    }
   },
 
   /**

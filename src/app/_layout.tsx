@@ -1,8 +1,6 @@
 import { useEffect } from 'react';
-import { Alert } from 'react-native';
-import * as Linking from 'expo-linking';
 import { StatusBar } from 'expo-status-bar';
-import { Stack, router } from 'expo-router';
+import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -11,7 +9,6 @@ import { auth, db } from '@/core/config/firebase';
 import { ThemeProvider } from '@/core/theme';
 import { SkyProvider, useSky } from '@/core/environment/SkyContext';
 import { useAuthStore } from '@/store/useAuthStore';
-import { widgetService } from '@/features/widget/widgetService';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -108,59 +105,6 @@ function RootNavigator() {
     return () => unsubscribe();
   }, [setUser, setLoading]);
 
-  // Handle Interactive Widget Deep Links (streakmate://checkin/{streakId})
-  useEffect(() => {
-    const handleDeepLink = async (event: { url: string }) => {
-      const url = event.url;
-      if (!url) return;
-
-      const match = url.match(/checkin\/([a-zA-Z0-9_-]+)/);
-      if (match && match[1]) {
-        let streakId = match[1];
-        const currentUid = auth.currentUser?.uid;
-        if (!currentUid) {
-          Alert.alert('StreakMate', 'Please sign in to complete your widget check-in.');
-          return;
-        }
-
-        if (streakId === 'quick') {
-          router.push('/widget');
-          return;
-        }
-
-        if (streakId === 'quick_1') {
-          const pinnedIds = await widgetService.getPinnedStreakIds();
-          if (pinnedIds.length > 0) {
-            streakId = pinnedIds[0];
-          } else {
-            router.push('/widget');
-            return;
-          }
-        } else if (streakId === 'quick_2') {
-          const pinnedIds = await widgetService.getPinnedStreakIds();
-          if (pinnedIds.length > 1) {
-            streakId = pinnedIds[1];
-          } else if (pinnedIds.length === 1) {
-            streakId = pinnedIds[0];
-          } else {
-            router.push('/widget');
-            return;
-          }
-        }
-
-        const res = await widgetService.quickCheckIn(streakId, currentUid);
-        Alert.alert(res.success ? 'Widget Check-In Completed' : 'Notice', res.message);
-      }
-    };
-
-    Linking.getInitialURL().then((initialUrl) => {
-      if (initialUrl) handleDeepLink({ url: initialUrl });
-    });
-
-    const sub = Linking.addEventListener('url', handleDeepLink);
-    return () => sub.remove();
-  }, []);
-
   return (
     <>
       <StatusBar style={skyConfig.isDarkContent ? 'dark' : 'light'} />
@@ -200,6 +144,13 @@ function RootNavigator() {
           options={{
             headerShown: false,
             presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="checkin/[id]"
+          options={{
+            headerShown: false,
+            presentation: 'transparentModal',
           }}
         />
       </Stack>
