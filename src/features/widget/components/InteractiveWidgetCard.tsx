@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSky } from '@/core/environment/SkyContext';
 import { WidgetStreakSnapshot, widgetService } from '../widgetService';
+import { NIMBUS_MASCOT_ASSETS, resolveMascotContext } from '../mascotAssets';
 import { StreakCelebrationModal } from '@/components/modals/StreakCelebrationModal';
 
 interface InteractiveWidgetCardProps {
@@ -27,23 +29,25 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
   onOpenDetails,
 }) => {
   const { skyConfig } = useSky();
-  const isDark = !skyConfig.isDarkContent; // false = daylight/light, true = twilight/night/dark
+  const isDark = !skyConfig.isDarkContent;
 
-  // Palette: Soft Sky — Minimal Editorial
+  // Rich pastel & sky palette
   const colors = {
-    bg: isDark ? '#172630' : '#F5F7F5',
-    surface: isDark ? '#223642' : '#E5EFED',
-    border: isDark ? '#223642' : '#E5EFED',
-    textPrimary: isDark ? '#EDF3F1' : '#273D4B',
-    textSecondary: isDark ? '#A4B8B4' : '#73817F',
-    accentMint: isDark ? '#77D2C5' : '#55B9AD',
-    flameAccent: isDark ? '#FFA21A' : '#FF9600',
-    checkBorder: isDark ? '#405869' : '#D1DDD9',
-    checkBgPending: isDark ? '#223642' : '#FFFFFF',
-    checkBgDone: '#FF9600', // Matching brand logo flame color!
-    divider: isDark ? '#223642' : '#E5EFED',
-    dayDotActive: isDark ? '#FFA21A' : '#FF9600',
-    dayDotInactive: isDark ? '#223642' : '#E5EFED',
+    bg: isDark ? '#172430' : '#F5F7F6',
+    surface: isDark ? '#213342' : '#FFFFFF',
+    surfaceSubtle: isDark ? '#293E50' : '#E8F2F0',
+    bubbleBg: isDark ? '#293E50' : '#E6F4F1',
+    border: isDark ? '#2A4053' : '#DCE9E5',
+    textPrimary: isDark ? '#EDF3F1' : '#233946',
+    textSecondary: isDark ? '#9EB3AF' : '#6A7D87',
+    mint: isDark ? '#77D2C5' : '#45ADA1',
+    flame: '#FF9600',
+    flameGold: '#FFA21A',
+    celebrationBg: isDark ? '#231D38' : '#FFF9EE',
+    celebrationBorder: isDark ? '#5C4A86' : '#FFE0B2',
+    checkPendingBorder: isDark ? '#3D5568' : '#CFDFDB',
+    checkPendingBg: isDark ? '#213342' : '#FFFFFF',
+    checkDoneBg: '#FF9600',
   };
 
   // Consolidate single snapshot vs multi snapshots (up to 2)
@@ -59,18 +63,35 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
     visible: boolean;
     name: string;
     count: number;
+    message?: string;
   }>({ visible: false, name: '', count: 0 });
 
+  const allCompleted = useMemo(() => {
+    if (items.length === 0) return false;
+    return items.every((it) => it.userCheckedIn || checkedMap[it.id]);
+  }, [items, checkedMap]);
+
+  const mascotContext = useMemo(() => {
+    return resolveMascotContext(allCompleted);
+  }, [allCompleted]);
+
+  const mascotSource = NIMBUS_MASCOT_ASSETS[mascotContext.state];
+
+  // Empty state
   if (items.length === 0) {
     return (
       <View style={[styles.container, { backgroundColor: colors.bg, borderColor: colors.border }]}>
         <View style={styles.emptyContainer}>
-          <Ionicons name="flame-outline" size={28} color={colors.textSecondary} />
+          <Image
+            source={NIMBUS_MASCOT_ASSETS.morning}
+            style={{ width: 64, height: 64, marginBottom: 8 }}
+            contentFit="contain"
+          />
           <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-            No habits pinned
+            No habits pinned yet
           </Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-            Select 1 or 2 habits below to display on your home screen widget
+            Select 1 or 2 habits below to bring Nimbus to life on your home screen!
           </Text>
         </View>
       </View>
@@ -91,6 +112,9 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
         visible: true,
         name: item.name,
         count: res.allCompleted ? item.currentStreak + 1 : item.currentStreak,
+        message: (res as any).earnedFreeze
+          ? '🎉 20-Day Milestone reached! You earned +1 Streak Freeze 🧊!'
+          : 'Checked in directly from your widget! Streak extended! 🔥',
       });
       onCheckInCompleted?.();
     }
@@ -98,201 +122,215 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
 
   const isSingle = items.length === 1;
   const singleItem = items[0];
-  const singleDone = singleItem.userCheckedIn || checkedMap[singleItem.id];
-  const singleLoading = Boolean(loadingMap[singleItem.id]);
-
-  const daysOfWeek = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-  const todayDayIndex = (new Date().getDay() + 6) % 7; // Monday = 0, Sunday = 6
+  const singleIsDone = singleItem.userCheckedIn || checkedMap[singleItem.id];
 
   return (
     <>
-      <View style={[styles.container, { backgroundColor: colors.bg, borderColor: colors.border }]}>
-        {/* Editorial Header */}
-        <View style={styles.headerRow}>
-          <Text style={[styles.headerLabel, { color: colors.textSecondary }]}>
-            {isSingle ? 'TODAY • HABIT' : `TODAY • ${items.length} HABITS`}
-          </Text>
-          <View style={styles.headerFlame}>
-            <Ionicons name="flame" size={15} color={colors.flameAccent} />
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: allCompleted ? colors.celebrationBg : colors.bg,
+            borderColor: allCompleted ? colors.celebrationBorder : colors.border,
+          },
+        ]}
+      >
+        {/* ========================================================== */}
+        {/* LAYOUT C: CELEBRATION WIDGET (When all habits are done)    */}
+        {/* ========================================================== */}
+        {allCompleted ? (
+          <View style={styles.celebrationContainer}>
+            <Image
+              source={NIMBUS_MASCOT_ASSETS.complete}
+              style={styles.celebrationMascot}
+              contentFit="contain"
+            />
+            <View style={{ flex: 1, marginLeft: 12 }}>
+              <View style={styles.celebrationBadgeRow}>
+                <Ionicons name="sparkles" size={13} color="#FF9600" style={{ marginRight: 4 }} />
+                <Text style={styles.celebrationBadgeText}>100% COMPLETE</Text>
+              </View>
+              <Text style={[styles.celebrationTitle, { color: colors.textPrimary }]}>
+                All Done Today! ⭐
+              </Text>
+              <Text style={[styles.celebrationSubtitle, { color: colors.textSecondary }]}>
+                {items.length === 1
+                  ? `${singleItem.name} saved!`
+                  : `Both habits completed! Momentum secured.`}
+              </Text>
+              <Text style={[styles.celebrationTomorrow, { color: colors.mint }]}>
+                Nimbus is celebrating with you! See you tomorrow 🌤️
+              </Text>
+            </View>
           </View>
-        </View>
+        ) : isSingle ? (
+          /* ========================================================== */
+          /* LAYOUT A: ONE STREAK (Hero Mascot Composition)              */
+          /* ========================================================== */
+          <View>
+            {/* Header speech bubble row */}
+            <View style={styles.singleTopRow}>
+              <View style={[styles.speechBubble, { backgroundColor: colors.bubbleBg, borderColor: colors.border }]}>
+                <Text style={[styles.speechBubbleText, { color: colors.mint }]}>
+                  {mascotContext.speechBubble}
+                </Text>
+              </View>
+              <Text style={[styles.headerDateLabel, { color: colors.textSecondary }]}>
+                TODAY • 1 HABIT
+              </Text>
+            </View>
 
-        {/* 1. SINGLE-STREAK CONFIGURATION (Focused Minimal Editorial) */}
-        {isSingle ? (
-          <View style={styles.singleContainer}>
-            <View style={styles.singleMainRow}>
-              {/* Left Info Column */}
+            {/* Mascot + Habit Card Composition */}
+            <View style={styles.singleContentRow}>
+              {/* Mascot Left */}
               <TouchableOpacity
-                style={styles.singleInfoCol}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
+                onPress={() => onOpenDetails?.(singleItem.id)}
+                style={styles.singleMascotCol}
+              >
+                <Image
+                  source={mascotSource}
+                  style={styles.singleMascotImage}
+                  contentFit="contain"
+                />
+              </TouchableOpacity>
+
+              {/* Habit Details Center */}
+              <TouchableOpacity
+                style={{ flex: 1, paddingLeft: 8, justifyContent: 'center' }}
+                activeOpacity={0.7}
                 onPress={() => onOpenDetails?.(singleItem.id)}
               >
-                <Text
-                  style={[
-                    styles.singleHabitName,
-                    {
-                      color: colors.textPrimary,
-                      textDecorationLine: singleDone ? 'line-through' : 'none',
-                      opacity: singleDone ? 0.75 : 1,
-                    },
-                  ]}
-                  numberOfLines={1}
-                >
+                <Text style={[styles.singleHabitName, { color: colors.textPrimary }]} numberOfLines={1}>
                   {singleItem.name}
                 </Text>
 
-                {/* Big Streak Number + Unit */}
-                <View style={styles.singleNumberRow}>
-                  <Text style={[styles.singleStreakNumber, { color: colors.flameAccent }]}>
-                    {singleDone && !singleItem.userCheckedIn ? singleItem.currentStreak + 1 : singleItem.currentStreak}
+                {/* Big Flame Counter */}
+                <View style={styles.singleCounterRow}>
+                  <Ionicons name="flame" size={26} color={colors.flame} style={{ marginRight: 4 }} />
+                  <Text style={[styles.singleCounterNumber, { color: colors.flameGold }]}>
+                    {singleIsDone && !singleItem.userCheckedIn
+                      ? singleItem.currentStreak + 1
+                      : singleItem.currentStreak}
                   </Text>
-                  <Text style={[styles.singleStreakUnit, { color: colors.textSecondary }]}>
+                  <Text style={[styles.singleCounterUnit, { color: colors.textSecondary }]}>
                     {singleItem.currentStreak === 1 ? 'day streak' : 'days streak'}
                   </Text>
                 </View>
 
-                {/* Status Label */}
+                {/* Status caption */}
                 <Text
                   style={[
-                    styles.singleStatusLabel,
-                    { color: singleDone ? colors.accentMint : colors.textSecondary },
+                    styles.singleStatusCaption,
+                    { color: singleIsDone ? colors.mint : colors.textSecondary },
                   ]}
                 >
-                  {singleDone ? 'Completed today ✓' : `${singleItem.hoursRemaining}h remaining today`}
+                  {singleIsDone ? 'Completed today ✓' : 'Tap button to check in'}
                 </Text>
               </TouchableOpacity>
 
-              {/* Right: Circular Check-in Action (Logo Matching Color #FF9600) */}
+              {/* Circular Action Button Right (Flame matching logo) */}
               <TouchableOpacity
                 style={[
-                  styles.circleCheckButton,
-                  singleDone
-                    ? { backgroundColor: colors.checkBgDone, borderColor: colors.checkBgDone }
-                    : { backgroundColor: colors.checkBgPending, borderColor: colors.checkBorder },
+                  styles.singleCircleButton,
+                  singleIsDone
+                    ? { backgroundColor: colors.checkDoneBg, borderColor: colors.checkDoneBg }
+                    : { backgroundColor: colors.checkPendingBg, borderColor: colors.checkPendingBorder },
                 ]}
                 onPress={() => handleCheckIn(singleItem)}
                 activeOpacity={0.7}
-                disabled={singleDone || singleLoading}
+                disabled={singleIsDone || loadingMap[singleItem.id]}
               >
-                {singleLoading ? (
-                  <ActivityIndicator size="small" color={colors.flameAccent} />
-                ) : singleDone ? (
-                  <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                {loadingMap[singleItem.id] ? (
+                  <ActivityIndicator size="small" color={colors.flame} />
+                ) : singleIsDone ? (
+                  <Ionicons name="checkmark" size={22} color="#FFFFFF" />
                 ) : (
                   <View style={[styles.innerRingDot, { borderColor: colors.textSecondary }]} />
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        ) : (
+          /* ========================================================== */
+          /* LAYOUT B: TWO STREAKS (Duo Rhythm Primary Layout)          */
+          /* ========================================================== */
+          <View>
+            {/* Header: Mascot avatar + Speech Bubble + Summary */}
+            <View style={styles.twoHeaderRow}>
+              <Image
+                source={mascotSource}
+                style={styles.twoMascotAvatar}
+                contentFit="contain"
+              />
+              <View style={[styles.speechBubbleMini, { backgroundColor: colors.bubbleBg, borderColor: colors.border }]}>
+                <Text style={[styles.speechBubbleTextMini, { color: colors.mint }]}>
+                  {mascotContext.speechBubble}
+                </Text>
+              </View>
+              <Text style={[styles.headerDateLabel, { color: colors.textSecondary, marginLeft: 'auto' }]}>
+                2 HABITS
+              </Text>
+            </View>
 
-            {/* Subtle 7-Day Progress Dots Row */}
-            <View style={styles.sevenDaysRow}>
-              {daysOfWeek.map((day, idx) => {
-                const isCurrent = idx === todayDayIndex;
-                const isPast = idx < todayDayIndex;
-                const isCheckedDay = isCurrent ? singleDone : isPast;
+            {/* Habit Rows */}
+            <View style={{ marginTop: 8 }}>
+              {items.map((item, index) => {
+                const isDone = item.userCheckedIn || checkedMap[item.id];
+                const isLoading = loadingMap[item.id];
 
                 return (
-                  <View key={idx} style={styles.dayDotCol}>
-                    <Text
-                      style={[
-                        styles.dayDotText,
-                        {
-                          color: isCurrent
-                            ? colors.textPrimary
-                            : colors.textSecondary,
-                          fontWeight: isCurrent ? '700' : '500',
-                        },
-                      ]}
-                    >
-                      {day}
-                    </Text>
-                    <View
-                      style={[
-                        styles.dayDot,
-                        {
-                          backgroundColor: isCheckedDay
-                            ? colors.dayDotActive
-                            : colors.dayDotInactive,
-                          borderWidth: isCurrent && !singleDone ? 1.5 : 0,
-                          borderColor: colors.flameAccent,
-                        },
-                      ]}
-                    />
+                  <View key={item.id}>
+                    {index > 0 && <View style={[styles.twoDivider, { backgroundColor: colors.border }]} />}
+                    <View style={styles.twoHabitRow}>
+                      {/* Left: Info */}
+                      <TouchableOpacity
+                        style={{ flex: 1, marginRight: 10 }}
+                        activeOpacity={0.7}
+                        onPress={() => onOpenDetails?.(item.id)}
+                      >
+                        <Text style={[styles.twoHabitName, { color: colors.textPrimary }]} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                          <Ionicons name="flame" size={14} color={colors.flame} style={{ marginRight: 3 }} />
+                          <Text style={[styles.twoStreakCount, { color: colors.flameGold }]}>
+                            {isDone && !item.userCheckedIn ? item.currentStreak + 1 : item.currentStreak}
+                            <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>
+                              {item.currentStreak === 1 ? ' day' : ' days'}
+                            </Text>
+                          </Text>
+                          <Text style={[styles.twoStreakStatus, { color: isDone ? colors.mint : colors.textSecondary }]}>
+                            {isDone ? ' • Done ✓' : ` • ${item.hoursRemaining}h left`}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Right: Circular Check-In Button */}
+                      <TouchableOpacity
+                        style={[
+                          styles.twoCircleButton,
+                          isDone
+                            ? { backgroundColor: colors.checkDoneBg, borderColor: colors.checkDoneBg }
+                            : { backgroundColor: colors.checkPendingBg, borderColor: colors.checkPendingBorder },
+                        ]}
+                        onPress={() => handleCheckIn(item)}
+                        activeOpacity={0.7}
+                        disabled={isDone || isLoading}
+                      >
+                        {isLoading ? (
+                          <ActivityIndicator size="small" color={colors.flame} />
+                        ) : isDone ? (
+                          <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                        ) : (
+                          <View style={[styles.twoInnerRingDot, { borderColor: colors.textSecondary }]} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 );
               })}
             </View>
-          </View>
-        ) : (
-          /* 2. TWO-STREAK CONFIGURATION (Two Visually Distinct Intentional Rows) */
-          <View style={styles.twoStreaksContainer}>
-            {items.map((item, index) => {
-              const isDone = item.userCheckedIn || checkedMap[item.id];
-              const isLoading = Boolean(loadingMap[item.id]);
-
-              return (
-                <View key={item.id}>
-                  {index > 0 && <View style={[styles.rowDivider, { backgroundColor: colors.divider }]} />}
-
-                  <View style={styles.twoStreakRow}>
-                    {/* Habit Info */}
-                    <TouchableOpacity
-                      style={styles.twoStreakInfo}
-                      activeOpacity={0.8}
-                      onPress={() => onOpenDetails?.(item.id)}
-                    >
-                      <Text
-                        style={[
-                          styles.twoStreakName,
-                          {
-                            color: colors.textPrimary,
-                            textDecorationLine: isDone ? 'line-through' : 'none',
-                            opacity: isDone ? 0.75 : 1,
-                          },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {item.name}
-                      </Text>
-
-                      <View style={styles.twoStreakMetaRow}>
-                        <Ionicons name="flame" size={13} color={colors.flameAccent} style={{ marginRight: 4 }} />
-                        <Text style={[styles.twoStreakCount, { color: colors.flameAccent }]}>
-                          {isDone && !item.userCheckedIn ? item.currentStreak + 1 : item.currentStreak}
-                          <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>
-                            {item.currentStreak === 1 ? ' day' : ' days'}
-                          </Text>
-                        </Text>
-                        <Text style={[styles.twoStreakStatus, { color: colors.textSecondary }]}>
-                          {isDone ? ' • Done ✓' : ` • ${item.hoursRemaining}h left`}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    {/* Circular Action Button (Matching Logo Flame Color) */}
-                    <TouchableOpacity
-                      style={[
-                        styles.twoCircleButton,
-                        isDone
-                          ? { backgroundColor: colors.checkBgDone, borderColor: colors.checkBgDone }
-                          : { backgroundColor: colors.checkBgPending, borderColor: colors.checkBorder },
-                      ]}
-                      onPress={() => handleCheckIn(item)}
-                      activeOpacity={0.7}
-                      disabled={isDone || isLoading}
-                    >
-                      {isLoading ? (
-                        <ActivityIndicator size="small" color={colors.flameAccent} />
-                      ) : isDone ? (
-                        <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-                      ) : (
-                        <View style={[styles.twoInnerRingDot, { borderColor: colors.textSecondary }]} />
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })}
           </View>
         )}
       </View>
@@ -302,7 +340,7 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
         visible={celebrationStreak.visible}
         streakName={celebrationStreak.name}
         streakCount={celebrationStreak.count}
-        message="Checked in directly from your widget! Streak extended! 🔥"
+        message={celebrationStreak.message || "Checked in directly from your widget! Streak extended! 🔥"}
         onClose={() => setCelebrationStreak((prev) => ({ ...prev, visible: false }))}
       />
     </>
@@ -311,164 +349,161 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 20,
+    borderRadius: 24,
     borderWidth: 1.5,
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 14,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
     shadowRadius: 10,
-    elevation: 3,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  headerLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
-  headerFlame: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
+    elevation: 4,
   },
   emptyContainer: {
-    paddingVertical: 24,
+    paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    marginTop: 8,
+    marginBottom: 4,
   },
   emptySubtitle: {
     fontSize: 12,
     textAlign: 'center',
-    marginTop: 4,
+    paddingHorizontal: 16,
+    lineHeight: 18,
   },
-  // Single Streak Styles
-  singleContainer: {
-    paddingVertical: 2,
-  },
-  singleMainRow: {
+  // Single Layout
+  singleTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  singleInfoCol: {
-    flex: 1,
-    paddingRight: 12,
+  speechBubble: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  speechBubbleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  headerDateLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  singleContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  singleMascotCol: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  singleMascotImage: {
+    width: 68,
+    height: 68,
   },
   singleHabitName: {
     fontSize: 16,
     fontWeight: '700',
-    lineHeight: 20,
+    letterSpacing: -0.2,
   },
-  singleNumberRow: {
+  singleCounterRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     marginTop: 2,
   },
-  singleStreakNumber: {
+  singleCounterNumber: {
     fontSize: 30,
     fontWeight: '800',
     lineHeight: 34,
   },
-  singleStreakUnit: {
+  singleCounterUnit: {
     fontSize: 12,
     fontWeight: '600',
     marginLeft: 6,
   },
-  singleStatusLabel: {
+  singleStatusCaption: {
     fontSize: 11,
     fontWeight: '600',
     marginTop: 2,
   },
-  circleCheckButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  singleCircleButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 10,
+    shadowColor: '#FF9600',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   innerRingDot: {
     width: 14,
     height: 14,
     borderRadius: 7,
-    borderWidth: 1.5,
+    borderWidth: 2,
   },
-  sevenDaysRow: {
+  // Two Streaks Layout
+  twoHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 14,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(128, 128, 128, 0.12)',
+    marginBottom: 6,
   },
-  dayDotCol: {
-    alignItems: 'center',
+  twoMascotAvatar: {
+    width: 32,
+    height: 32,
+    marginRight: 6,
   },
-  dayDotText: {
+  speechBubbleMini: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  speechBubbleTextMini: {
     fontSize: 10,
-    marginBottom: 4,
+    fontWeight: '700',
   },
-  dayDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  // Two Streak Styles
-  twoStreaksContainer: {
-    paddingVertical: 2,
-  },
-  twoStreakRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-  },
-  rowDivider: {
+  twoDivider: {
     height: 1,
-    width: '100%',
     marginVertical: 6,
   },
-  twoStreakInfo: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  twoStreakName: {
-    fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 19,
-  },
-  twoStreakMetaRow: {
+  twoHabitRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 3,
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+  },
+  twoHabitName: {
+    fontSize: 15,
+    fontWeight: '700',
   },
   twoStreakCount: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
   },
   twoStreakStatus: {
     fontSize: 11,
     fontWeight: '500',
+    marginLeft: 2,
   },
   twoCircleButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -477,6 +512,42 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    borderWidth: 1.5,
+    borderWidth: 2,
+  },
+  // Celebration Layout
+  celebrationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  celebrationMascot: {
+    width: 72,
+    height: 72,
+  },
+  celebrationBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  celebrationBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FF9600',
+    letterSpacing: 0.8,
+  },
+  celebrationTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  celebrationSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  celebrationTomorrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 4,
   },
 });

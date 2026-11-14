@@ -29,6 +29,7 @@ export default function WidgetScreen() {
 
   const [streaks, setStreaks] = useState<StreakData[]>([]);
   const [pinnedStreakIds, setPinnedStreakIds] = useState<string[]>([]);
+  const [targetCapacity, setTargetCapacity] = useState<1 | 2>(1);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,10 +46,12 @@ export default function WidgetScreen() {
         const valid = savedPins.filter((id) => userStreaks.some((s: StreakData) => s.id === id));
         if (valid.length > 0) {
           setPinnedStreakIds(valid);
+          setTargetCapacity(valid.length === 2 ? 2 : 1);
           await widgetService.syncToNativeWidget(userStreaks, user.uid);
         } else if (userStreaks.length > 0) {
           const defaultPins = [userStreaks[0].id];
           setPinnedStreakIds(defaultPins);
+          setTargetCapacity(1);
           await widgetService.setPinnedStreakIds(defaultPins);
           await widgetService.syncToNativeWidget(userStreaks, user.uid);
         }
@@ -70,18 +73,27 @@ export default function WidgetScreen() {
 
   const handleToggleStreak = async (id: string) => {
     let next: string[];
-    if (pinnedStreakIds.includes(id)) {
-      if (pinnedStreakIds.length <= 1) {
-        Alert.alert('Notice', 'At least 1 streak must remain pinned to your widget.');
-        return;
-      }
-      next = pinnedStreakIds.filter((p) => p !== id);
+    if (targetCapacity === 1) {
+      // In 1 Habit mode, tapping any streak immediately selects it
+      next = [id];
     } else {
-      if (pinnedStreakIds.length >= 2) {
-        // Shift oldest out to keep max 2 streaks
-        next = [pinnedStreakIds[1], id];
+      // In 2 Habits mode:
+      if (pinnedStreakIds.includes(id)) {
+        if (pinnedStreakIds.length <= 1) {
+          Alert.alert(
+            'Keep 2 Habits',
+            'In 2 Habits mode, please tap another habit below or switch to 1 Habit Mode.'
+          );
+          return;
+        }
+        next = pinnedStreakIds.filter((p) => p !== id);
       } else {
-        next = [...pinnedStreakIds, id];
+        if (pinnedStreakIds.length >= 2) {
+          // Replace second habit
+          next = [pinnedStreakIds[0], id];
+        } else {
+          next = [...pinnedStreakIds, id];
+        }
       }
     }
     setPinnedStreakIds(next);
@@ -143,14 +155,128 @@ export default function WidgetScreen() {
           />
         )}
 
-        {/* Choose 1 or 2 Streaks To Pin */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.xl, marginBottom: spacing.sm }}>
+        {/* Habit Count Mode Selector (1 Habit vs 2 Habits) */}
+        <View style={{ marginTop: spacing.xl, marginBottom: spacing.md }}>
+          <Text style={[typography.headline, { color: skyConfig.textPrimary, marginBottom: spacing.xs }]}>
+            Widget Layout Mode
+          </Text>
+          <Text style={[typography.caption, { color: skyConfig.textSecondary, marginBottom: spacing.sm }]}>
+            Choose whether your home screen displays 1 hero habit with character art or 2 habits together:
+          </Text>
+
+          <View
+            style={[
+              styles.segmentContainer,
+              {
+                backgroundColor: skyConfig.isDarkContent
+                  ? 'rgba(255, 255, 255, 0.25)'
+                  : 'rgba(15, 23, 42, 0.35)',
+                borderColor: skyConfig.glassBorderTop,
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={[
+                styles.segmentBtn,
+                targetCapacity === 1 && {
+                  backgroundColor: skyConfig.accent,
+                  shadowColor: skyConfig.accent,
+                  shadowOpacity: 0.3,
+                  shadowRadius: 6,
+                  elevation: 2,
+                },
+              ]}
+              activeOpacity={0.8}
+              onPress={async () => {
+                setTargetCapacity(1);
+                if (pinnedStreakIds.length > 1) {
+                  const next = [pinnedStreakIds[0]];
+                  setPinnedStreakIds(next);
+                  await widgetService.setPinnedStreakIds(next);
+                  if (user?.uid) await widgetService.syncToNativeWidget(streaks, user.uid);
+                }
+              }}
+            >
+              <Ionicons
+                name="sparkles"
+                size={16}
+                color={targetCapacity === 1 ? '#FFFFFF' : skyConfig.textSecondary}
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    color: targetCapacity === 1 ? '#FFFFFF' : skyConfig.textPrimary,
+                    fontWeight: '700',
+                  },
+                ]}
+              >
+                1 Habit (Hero Buddy)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.segmentBtn,
+                targetCapacity === 2 && {
+                  backgroundColor: skyConfig.accent,
+                  shadowColor: skyConfig.accent,
+                  shadowOpacity: 0.3,
+                  shadowRadius: 6,
+                  elevation: 2,
+                },
+              ]}
+              activeOpacity={0.8}
+              onPress={async () => {
+                setTargetCapacity(2);
+                if (pinnedStreakIds.length === 1 && streaks.length > 1) {
+                  const second = streaks.find((s) => s.id !== pinnedStreakIds[0]);
+                  if (second) {
+                    const next = [pinnedStreakIds[0], second.id];
+                    setPinnedStreakIds(next);
+                    await widgetService.setPinnedStreakIds(next);
+                    if (user?.uid) await widgetService.syncToNativeWidget(streaks, user.uid);
+                  }
+                }
+              }}
+            >
+              <Ionicons
+                name="layers"
+                size={16}
+                color={targetCapacity === 2 ? '#FFFFFF' : skyConfig.textSecondary}
+                style={{ marginRight: 6 }}
+              />
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    color: targetCapacity === 2 ? '#FFFFFF' : skyConfig.textPrimary,
+                    fontWeight: '700',
+                  },
+                ]}
+              >
+                2 Habits (Duo Rhythm)
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Choose Streaks Header */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: spacing.sm,
+          }}
+        >
           <Text style={[typography.headline, { color: skyConfig.textPrimary }]}>
-            Select 1 or 2 Streaks
+            {targetCapacity === 1 ? 'Select Your 1 Habit' : 'Select Your 2 Habits'}
           </Text>
           <View style={[styles.pillBadge, { backgroundColor: skyConfig.badgeBg }]}>
             <Text style={[typography.caption, { color: skyConfig.accent, fontWeight: '700' }]}>
-              {pinnedStreakIds.length} of 2 Selected
+              {pinnedStreakIds.length} of {targetCapacity} Selected
             </Text>
           </View>
         </View>
@@ -290,6 +416,20 @@ const styles = StyleSheet.create({
   pillBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
+    borderRadius: 12,
+  },
+  segmentContainer: {
+    flexDirection: 'row',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 4,
+  },
+  segmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
     borderRadius: 12,
   },
 });

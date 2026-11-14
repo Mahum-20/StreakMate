@@ -60,7 +60,7 @@ const withAndroidWidget = (config) => {
     return config;
   });
 
-  // 3. Generate native Android files
+  // 3. Generate native Android files & copy mascot drawables
   config = withDangerousMod(config, [
     'android',
     async (config) => {
@@ -75,6 +75,22 @@ const withAndroidWidget = (config) => {
       fs.mkdirSync(layoutDir, { recursive: true });
       fs.mkdirSync(drawableDir, { recursive: true });
       fs.mkdirSync(javaDir, { recursive: true });
+
+      // Copy mascot illustrations from assets/mascot to Android res/drawable
+      const mascotSrcDir = path.join(config.modRequest.projectRoot, 'assets', 'mascot');
+      const mascotFiles = [
+        ['nimbus_morning.png', 'widget_mascot_morning.png'],
+        ['nimbus_afternoon.png', 'widget_mascot_afternoon.png'],
+        ['nimbus_evening.png', 'widget_mascot_evening.png'],
+        ['nimbus_night.png', 'widget_mascot_night.png'],
+        ['nimbus_complete.png', 'widget_mascot_complete.png'],
+      ];
+      for (const [srcName, destName] of mascotFiles) {
+        const srcPath = path.join(mascotSrcDir, srcName);
+        if (fs.existsSync(srcPath)) {
+          fs.copyFileSync(srcPath, path.join(drawableDir, destName));
+        }
+      }
 
       // 1. streak_widget_info.xml
       const widgetInfoXml = `<?xml version="1.0" encoding="utf-8"?>
@@ -92,28 +108,39 @@ const withAndroidWidget = (config) => {
 `;
       fs.writeFileSync(path.join(xmlDir, 'streak_widget_info.xml'), widgetInfoXml);
 
-      // 2. streak_widget_bg.xml (Soft Sky Dark: #172630 surface, #223642 border)
+      // 2. streak_widget_bg.xml (Rich Soft Sky: #172430 surface, #2A4053 border, 24dp corners)
       const widgetBgXml = `<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="#172630" />
-    <stroke android:width="1.5dp" android:color="#223642" />
-    <corners android:radius="20dp" />
+    <solid android:color="#172430" />
+    <stroke android:width="1.5dp" android:color="#2A4053" />
+    <corners android:radius="24dp" />
 </shape>
 `;
       fs.writeFileSync(path.join(drawableDir, 'streak_widget_bg.xml'), widgetBgXml);
 
-      // 3. streak_widget_check_pending.xml (Subtle outlined circular action button)
+      // 3. streak_widget_bubble_bg.xml (Cute speech bubble)
+      const bubbleBgXml = `<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#293E50" />
+    <stroke android:width="1dp" android:color="#3A566E" />
+    <corners android:radius="12dp" />
+</shape>
+`;
+      fs.writeFileSync(path.join(drawableDir, 'streak_widget_bubble_bg.xml'), bubbleBgXml);
+
+      // 4. streak_widget_check_pending.xml (Subtle circular action button)
       const checkPendingXml = `<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
-    <solid android:color="#223642" />
-    <stroke android:width="2dp" android:color="#405869" />
+    <solid android:color="#213342" />
+    <stroke android:width="2dp" android:color="#3D5568" />
 </shape>
 `;
       fs.writeFileSync(path.join(drawableDir, 'streak_widget_check_pending.xml'), checkPendingXml);
 
-      // 4. streak_widget_check_done.xml (Filled circle matching brand logo flame color #FF9600 with white checkmark)
+      // 5. streak_widget_check_done.xml (Filled circle matching brand logo flame color #FF9600 with white checkmark)
       const checkDoneXml = `<?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
@@ -130,7 +157,7 @@ const withAndroidWidget = (config) => {
 `;
       fs.writeFileSync(path.join(drawableDir, 'streak_widget_check_done.xml'), checkDoneXml);
 
-      // 5. streak_widget_layout.xml (Soft Sky — Minimal Editorial with 1-streak, 2-streak and empty states)
+      // 6. streak_widget_layout.xml (Duolingo-level character-driven widget)
       const widgetLayoutXml = `<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_container"
@@ -138,107 +165,147 @@ const withAndroidWidget = (config) => {
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/streak_widget_bg"
-    android:paddingLeft="16dp"
-    android:paddingRight="16dp"
-    android:paddingTop="14dp"
-    android:paddingBottom="14dp">
+    android:paddingLeft="14dp"
+    android:paddingRight="14dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp">
 
-    <!-- Header: Editorial Date Label & Flame Brand Logo -->
+    <!-- Layout C: Celebration Container (Shown when all pinned habits done!) -->
     <LinearLayout
+        android:id="@+id/celebration_container"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="match_parent"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="8dp">
+        android:visibility="gone">
 
-        <TextView
-            android:id="@+id/widget_header_label"
+        <ImageView
+            android:id="@+id/celebration_mascot"
+            android:layout_width="66dp"
+            android:layout_height="66dp"
+            android:src="@drawable/widget_mascot_complete"
+            android:scaleType="fitCenter" />
+
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="TODAY • STREAKS"
-            android:textColor="#A4B8B4"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:letterSpacing="0.08"
-            android:maxLines="1"
-            android:ellipsize="end" />
+            android:orientation="vertical"
+            android:layout_marginLeft="10dp">
 
-        <ImageView
-            android:id="@+id/widget_header_logo"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
-            android:src="@mipmap/ic_launcher" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="100% COMPLETE ⭐"
+                android:textColor="#FF9600"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08" />
+
+            <TextView
+                android:id="@+id/celebration_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="All Done Today!"
+                android:textColor="#EDF3F1"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:layout_marginTop="1dp" />
+
+            <TextView
+                android:id="@+id/celebration_subtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Streak protected • See you tomorrow 🌤️"
+                android:textColor="#77D2C5"
+                android:textSize="11sp"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- Empty State Container -->
-    <LinearLayout
-        android:id="@+id/empty_widget_container"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:visibility="gone">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="No habits pinned"
-            android:textColor="#EDF3F1"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Tap to select habits in StreakMate"
-            android:textColor="#A4B8B4"
-            android:textSize="11sp"
-            android:layout_marginTop="3dp" />
-    </LinearLayout>
-
-    <!-- Single Streak Container (Focused Minimal Editorial Layout) -->
+    <!-- Layout A: Single Streak Hero Container -->
     <LinearLayout
         android:id="@+id/single_streak_container"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:gravity="center_vertical"
         android:visibility="visible">
 
+        <!-- Header with speech bubble -->
         <LinearLayout
-            android:id="@+id/single_streak_action_area"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:gravity="center_vertical"
+            android:layout_marginBottom="6dp">
 
-            <LinearLayout
+            <TextView
+                android:id="@+id/single_speech_bubble"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/streak_widget_bubble_bg"
+                android:paddingLeft="8dp"
+                android:paddingRight="8dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
+                android:text="Ready to conquer today? ☀️"
+                android:textColor="#77D2C5"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/single_header_date"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:gravity="end"
+                android:text="TODAY • 1 HABIT"
+                android:textColor="#9EB3AF"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08" />
+        </LinearLayout>
+
+        <!-- Mascot + Info + Button Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:id="@+id/single_streak_mascot"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:src="@drawable/widget_mascot_morning"
+                android:scaleType="fitCenter" />
+
+            <LinearLayout
+                android:id="@+id/single_streak_action_area"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginLeft="8dp">
 
                 <TextView
                     android:id="@+id/single_streak_name"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Habit Name"
+                    android:text="Daily Habit"
                     android:textColor="#EDF3F1"
-                    android:textSize="16sp"
+                    android:textSize="15sp"
                     android:textStyle="bold"
                     android:maxLines="1"
                     android:ellipsize="end" />
 
-                <!-- Large Streak Number Row -->
                 <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="bottom"
-                    android:layout_marginTop="2dp">
+                    android:layout_marginTop="1dp">
 
                     <TextView
                         android:id="@+id/single_streak_number"
@@ -253,41 +320,80 @@ const withAndroidWidget = (config) => {
                         android:id="@+id/single_streak_unit"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="days streak"
-                        android:textColor="#A4B8B4"
-                        android:textSize="12sp"
-                        android:layout_marginLeft="6dp" />
+                        android:text="day streak"
+                        android:textColor="#9EB3AF"
+                        android:textSize="11sp"
+                        android:layout_marginLeft="5dp"
+                        android:layout_marginBottom="3dp" />
                 </LinearLayout>
 
                 <TextView
                     android:id="@+id/single_streak_status"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Tap to check in"
+                    android:text="Tap button to check in"
                     android:textColor="#77D2C5"
-                    android:textSize="11sp"
-                    android:layout_marginTop="2dp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
-            <!-- Circular Check-in Button (Matching Logo Flame Color) -->
             <ImageView
                 android:id="@+id/single_streak_checkbox"
-                android:layout_width="38dp"
-                android:layout_height="38dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:src="@drawable/streak_widget_check_pending"
-                android:layout_marginLeft="12dp" />
+                android:layout_marginLeft="6dp" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Two Streak Container (Two Distinct Intentional Rows) -->
+    <!-- Layout B: Two Streaks Container (Duo Rhythm Primary) -->
     <LinearLayout
         android:id="@+id/two_streak_container"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:gravity="center_vertical"
         android:visibility="gone">
+
+        <!-- Header with Mini Nimbus Avatar -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <ImageView
+                android:id="@+id/two_mascot_avatar"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:src="@drawable/widget_mascot_morning"
+                android:scaleType="fitCenter" />
+
+            <TextView
+                android:id="@+id/two_speech_bubble"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/streak_widget_bubble_bg"
+                android:paddingLeft="7dp"
+                android:paddingRight="7dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:text="Keep it going! ✨"
+                android:textColor="#77D2C5"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:layout_marginLeft="4dp" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:text="2 HABITS"
+                android:textColor="#9EB3AF"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.08" />
+        </LinearLayout>
 
         <!-- Row 1 -->
         <LinearLayout
@@ -297,7 +403,7 @@ const withAndroidWidget = (config) => {
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:paddingTop="2dp"
-            android:paddingBottom="4dp">
+            android:paddingBottom="2dp">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -311,7 +417,7 @@ const withAndroidWidget = (config) => {
                     android:layout_height="wrap_content"
                     android:text="Habit 1"
                     android:textColor="#EDF3F1"
-                    android:textSize="15sp"
+                    android:textSize="14sp"
                     android:textStyle="bold"
                     android:maxLines="1"
                     android:ellipsize="end" />
@@ -322,8 +428,7 @@ const withAndroidWidget = (config) => {
                     android:layout_height="wrap_content"
                     android:text="14 days"
                     android:textColor="#FFA21A"
-                    android:textSize="12sp"
-                    android:layout_marginTop="1dp" />
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <ImageView
@@ -331,16 +436,16 @@ const withAndroidWidget = (config) => {
                 android:layout_width="34dp"
                 android:layout_height="34dp"
                 android:src="@drawable/streak_widget_check_pending"
-                android:layout_marginLeft="10dp" />
+                android:layout_marginLeft="8dp" />
         </LinearLayout>
 
-        <!-- Divider Line -->
+        <!-- Divider -->
         <ImageView
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="#223642"
-            android:layout_marginTop="5dp"
-            android:layout_marginBottom="5dp" />
+            android:layout_marginTop="3dp"
+            android:layout_marginBottom="3dp" />
 
         <!-- Row 2 -->
         <LinearLayout
@@ -350,7 +455,7 @@ const withAndroidWidget = (config) => {
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:paddingTop="2dp"
-            android:paddingBottom="4dp">
+            android:paddingBottom="2dp">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -364,7 +469,7 @@ const withAndroidWidget = (config) => {
                     android:layout_height="wrap_content"
                     android:text="Habit 2"
                     android:textColor="#EDF3F1"
-                    android:textSize="15sp"
+                    android:textSize="14sp"
                     android:textStyle="bold"
                     android:maxLines="1"
                     android:ellipsize="end" />
@@ -375,8 +480,7 @@ const withAndroidWidget = (config) => {
                     android:layout_height="wrap_content"
                     android:text="7 days"
                     android:textColor="#FFA21A"
-                    android:textSize="12sp"
-                    android:layout_marginTop="1dp" />
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <ImageView
@@ -384,14 +488,46 @@ const withAndroidWidget = (config) => {
                 android:layout_width="34dp"
                 android:layout_height="34dp"
                 android:src="@drawable/streak_widget_check_pending"
-                android:layout_marginLeft="10dp" />
+                android:layout_marginLeft="8dp" />
         </LinearLayout>
+    </LinearLayout>
+
+    <!-- Empty Container -->
+    <LinearLayout
+        android:id="@+id/empty_widget_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/widget_mascot_morning"
+            android:scaleType="fitCenter" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="No habits pinned"
+            android:textColor="#EDF3F1"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tap to select habits in StreakMate"
+            android:textColor="#9EB3AF"
+            android:textSize="11sp" />
     </LinearLayout>
 </LinearLayout>
 `;
       fs.writeFileSync(path.join(layoutDir, 'streak_widget_layout.xml'), widgetLayoutXml);
 
-      // 6. StreakWidgetProvider.kt
+      // 7. StreakWidgetProvider.kt
       const providerKt = `package com.streakmate.app
 
 import android.app.PendingIntent
@@ -406,6 +542,7 @@ import android.widget.RemoteViews
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -414,6 +551,34 @@ class StreakWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         val prefs = context.getSharedPreferences("StreakWidgetPrefs", Context.MODE_PRIVATE)
         val rawJson = prefs.getString("widget_data", null)
+
+        val cal = Calendar.getInstance()
+        val hour = cal.get(Calendar.HOUR_OF_DAY)
+
+        // Time-of-day mascot selection & speech bubble
+        val mascotResId: Int
+        val speechBubbleText: String
+        when {
+            hour in 5..11 -> {
+                mascotResId = R.drawable.widget_mascot_morning
+                speechBubbleText = "Good morning! Ready? ✨"
+            }
+            hour in 12..16 -> {
+                mascotResId = R.drawable.widget_mascot_afternoon
+                speechBubbleText = "Keep it going! 🌤️"
+            }
+            hour in 17..20 -> {
+                mascotResId = R.drawable.widget_mascot_evening
+                speechBubbleText = "Check in tonight! ⏰"
+            }
+            else -> {
+                mascotResId = R.drawable.widget_mascot_night
+                speechBubbleText = "Save our streak! 🌙"
+            }
+        }
+
+        val dateFormat = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
+        val todayDate = dateFormat.format(Date()).uppercase(Locale.getDefault())
 
         for (appWidgetId in appWidgetIds) {
             try {
@@ -432,11 +597,6 @@ class StreakWidgetProvider : AppWidgetProvider() {
                 )
                 views.setOnClickPendingIntent(R.id.widget_container, openAppPendingIntent)
 
-                // Set header date (e.g. "TODAY • SAT, NOV 14")
-                val dateFormat = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
-                val todayLabel = "TODAY • " + dateFormat.format(Date()).uppercase(Locale.getDefault())
-                views.setTextViewText(R.id.widget_header_label, todayLabel)
-
                 var streaksArray: JSONArray? = null
                 if (!rawJson.isNullOrEmpty()) {
                     try {
@@ -449,14 +609,45 @@ class StreakWidgetProvider : AppWidgetProvider() {
 
                 val streakCount = streaksArray?.length() ?: 0
 
+                // Check if all pinned habits are checked in today
+                var allCompleted = streakCount > 0
+                for (i in 0 until streakCount) {
+                    val s = streaksArray!!.getJSONObject(i)
+                    if (!s.optBoolean("userCheckedIn", false)) {
+                        allCompleted = false
+                        break
+                    }
+                }
+
                 if (streakCount == 0) {
+                    // Empty state
+                    views.setViewVisibility(R.id.celebration_container, View.GONE)
                     views.setViewVisibility(R.id.single_streak_container, View.GONE)
                     views.setViewVisibility(R.id.two_streak_container, View.GONE)
                     views.setViewVisibility(R.id.empty_widget_container, View.VISIBLE)
+                } else if (allCompleted) {
+                    // Layout C: Celebration Widget
+                    views.setViewVisibility(R.id.empty_widget_container, View.GONE)
+                    views.setViewVisibility(R.id.single_streak_container, View.GONE)
+                    views.setViewVisibility(R.id.two_streak_container, View.GONE)
+                    views.setViewVisibility(R.id.celebration_container, View.VISIBLE)
+
+                    views.setImageViewResource(R.id.celebration_mascot, R.drawable.widget_mascot_complete)
+                    views.setTextViewText(R.id.celebration_title, "All Done Today! ⭐")
+                    views.setTextViewText(
+                        R.id.celebration_subtitle,
+                        if (streakCount == 1) "Habit completed! Streak protected 🌤️" else "Both habits completed! Momentum secured 🌤️"
+                    )
                 } else if (streakCount == 1) {
+                    // Layout A: Single Streak (Hero Mascot)
+                    views.setViewVisibility(R.id.celebration_container, View.GONE)
                     views.setViewVisibility(R.id.empty_widget_container, View.GONE)
                     views.setViewVisibility(R.id.two_streak_container, View.GONE)
                     views.setViewVisibility(R.id.single_streak_container, View.VISIBLE)
+
+                    views.setImageViewResource(R.id.single_streak_mascot, mascotResId)
+                    views.setTextViewText(R.id.single_speech_bubble, speechBubbleText)
+                    views.setTextViewText(R.id.single_header_date, "TODAY • $todayDate")
 
                     val streakObj = streaksArray!!.getJSONObject(0)
                     val streakId = streakObj.optString("id", "")
@@ -472,7 +663,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                         views.setTextViewText(R.id.single_streak_status, "Completed today ✓")
                         views.setImageViewResource(R.id.single_streak_checkbox, R.drawable.streak_widget_check_done)
                     } else {
-                        views.setTextViewText(R.id.single_streak_status, "Tap to check in")
+                        views.setTextViewText(R.id.single_streak_status, "Tap button to check in")
                         views.setImageViewResource(R.id.single_streak_checkbox, R.drawable.streak_widget_check_pending)
                     }
 
@@ -490,9 +681,14 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     views.setOnClickPendingIntent(R.id.single_streak_checkbox, checkInPending)
 
                 } else {
+                    // Layout B: Two Streaks (Duo Rhythm)
+                    views.setViewVisibility(R.id.celebration_container, View.GONE)
                     views.setViewVisibility(R.id.empty_widget_container, View.GONE)
                     views.setViewVisibility(R.id.single_streak_container, View.GONE)
                     views.setViewVisibility(R.id.two_streak_container, View.VISIBLE)
+
+                    views.setImageViewResource(R.id.two_mascot_avatar, mascotResId)
+                    views.setTextViewText(R.id.two_speech_bubble, speechBubbleText)
 
                     // Streak 1
                     val s1 = streaksArray!!.getJSONObject(0)
@@ -559,7 +755,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
 `;
       fs.writeFileSync(path.join(javaDir, 'StreakWidgetProvider.kt'), providerKt);
 
-      // 7. StreakWidgetModule.kt (NativeModule to receive streak updates from React Native)
+      // 8. StreakWidgetModule.kt (NativeModule to receive streak updates from React Native)
       const moduleKt = `package com.streakmate.app
 
 import android.appwidget.AppWidgetManager
@@ -595,7 +791,7 @@ class StreakWidgetModule(reactContext: ReactApplicationContext) : ReactContextBa
 `;
       fs.writeFileSync(path.join(javaDir, 'StreakWidgetModule.kt'), moduleKt);
 
-      // 8. StreakWidgetPackage.kt (ReactPackage registering StreakWidgetModule)
+      // 9. StreakWidgetPackage.kt (ReactPackage registering StreakWidgetModule)
       const packageKt = `package com.streakmate.app
 
 import com.facebook.react.ReactPackage
