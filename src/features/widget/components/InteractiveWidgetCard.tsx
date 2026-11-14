@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/core/theme';
 import { useSky } from '@/core/environment/SkyContext';
 import { WidgetStreakSnapshot, widgetService } from '../widgetService';
 import { StreakCelebrationModal } from '@/components/modals/StreakCelebrationModal';
@@ -27,8 +26,25 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
   onCheckInCompleted,
   onOpenDetails,
 }) => {
-  const { typography } = useTheme();
   const { skyConfig } = useSky();
+  const isDark = !skyConfig.isDarkContent; // false = daylight/light, true = twilight/night/dark
+
+  // Palette: Soft Sky — Minimal Editorial
+  const colors = {
+    bg: isDark ? '#172630' : '#F5F7F5',
+    surface: isDark ? '#223642' : '#E5EFED',
+    border: isDark ? '#223642' : '#E5EFED',
+    textPrimary: isDark ? '#EDF3F1' : '#273D4B',
+    textSecondary: isDark ? '#A4B8B4' : '#73817F',
+    accentMint: isDark ? '#77D2C5' : '#55B9AD',
+    flameAccent: isDark ? '#FFA21A' : '#FF9600',
+    checkBorder: isDark ? '#405869' : '#D1DDD9',
+    checkBgPending: isDark ? '#223642' : '#FFFFFF',
+    checkBgDone: '#FF9600', // Matching brand logo flame color!
+    divider: isDark ? '#223642' : '#E5EFED',
+    dayDotActive: isDark ? '#FFA21A' : '#FF9600',
+    dayDotInactive: isDark ? '#223642' : '#E5EFED',
+  };
 
   // Consolidate single snapshot vs multi snapshots (up to 2)
   const items: WidgetStreakSnapshot[] = snapshots && snapshots.length > 0
@@ -47,35 +63,19 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
 
   if (items.length === 0) {
     return (
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: skyConfig.isDarkContent
-              ? 'rgba(255, 255, 255, 0.90)'
-              : 'rgba(15, 23, 42, 0.85)',
-            borderColor: skyConfig.isDarkContent
-              ? 'rgba(255, 255, 255, 0.8)'
-              : 'rgba(255, 255, 255, 0.15)',
-          },
-        ]}
-      >
-        <View style={styles.emptyContent}>
-          <View style={styles.emptyMascotCircle}>
-            <Ionicons name="flame" size={36} color="#FF9600" />
-          </View>
-          <Text style={[typography.headline, { color: skyConfig.textPrimary, marginTop: 10 }]}>
-            No Streaks Pinned Yet
+      <View style={[styles.container, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="flame-outline" size={28} color={colors.textSecondary} />
+          <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+            No habits pinned
           </Text>
-          <Text style={[typography.caption, { color: skyConfig.textSecondary, textAlign: 'center', marginTop: 4 }]}>
-            Select 1 or 2 habits below to display on your home screen widget with quick checkboxes!
+          <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+            Select 1 or 2 habits below to display on your home screen widget
           </Text>
         </View>
       </View>
     );
   }
-
-  const allCompleted = items.every((s) => s.userCheckedIn || checkedMap[s.id]);
 
   const handleCheckIn = async (item: WidgetStreakSnapshot) => {
     const isDone = item.userCheckedIn || checkedMap[item.id];
@@ -96,147 +96,205 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
     }
   };
 
+  const isSingle = items.length === 1;
+  const singleItem = items[0];
+  const singleDone = singleItem.userCheckedIn || checkedMap[singleItem.id];
+  const singleLoading = Boolean(loadingMap[singleItem.id]);
+
+  const daysOfWeek = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const todayDayIndex = (new Date().getDay() + 6) % 7; // Monday = 0, Sunday = 6
+
   return (
     <>
-      <View
-        style={[
-          styles.container,
-          {
-            backgroundColor: skyConfig.isDarkContent
-              ? '#FFFFFF'
-              : '#131F24',
-            borderColor: skyConfig.isDarkContent
-              ? '#E5E5E5'
-              : '#2C3E48',
-          },
-        ]}
-      >
-        {/* Top Cute Header: Mascot Mood & Speech Bubble */}
-        <View style={styles.mascotRow}>
-          <View style={styles.mascotBadge}>
-            <Ionicons
-              name={allCompleted ? 'sparkles' : 'flame'}
-              size={22}
-              color={allCompleted ? '#58CC02' : '#FF9600'}
-            />
-          </View>
-
-          {/* Cute Speech Bubble */}
-          <View
-            style={[
-              styles.speechBubble,
-              {
-                backgroundColor: allCompleted
-                  ? '#F0FDF4'
-                  : skyConfig.isDarkContent
-                  ? '#FFFBEB'
-                  : '#202F36',
-                borderColor: allCompleted
-                  ? '#BBF7D0'
-                  : skyConfig.isDarkContent
-                  ? '#FEF08A'
-                  : '#334155',
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.speechText,
-                {
-                  color: allCompleted
-                    ? '#15803D'
-                    : skyConfig.isDarkContent
-                    ? '#B45309'
-                    : '#FDE047',
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {allCompleted
-                ? "Streak safe! You're on fire today! 🔥"
-                : items.length === 1
-                ? "Don't let the flame die today! ⏱️"
-                : "Check off your habits for today! 🎯"}
-            </Text>
+      <View style={[styles.container, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+        {/* Editorial Header */}
+        <View style={styles.headerRow}>
+          <Text style={[styles.headerLabel, { color: colors.textSecondary }]}>
+            {isSingle ? 'TODAY • HABIT' : `TODAY • ${items.length} HABITS`}
+          </Text>
+          <View style={styles.headerFlame}>
+            <Ionicons name="flame" size={15} color={colors.flameAccent} />
           </View>
         </View>
 
-        {/* Streaks List (1 or 2 rows with checkbox) */}
-        <View style={styles.streaksContainer}>
-          {items.map((item, index) => {
-            const isDone = item.userCheckedIn || checkedMap[item.id];
-            const isLoading = Boolean(loadingMap[item.id]);
+        {/* 1. SINGLE-STREAK CONFIGURATION (Focused Minimal Editorial) */}
+        {isSingle ? (
+          <View style={styles.singleContainer}>
+            <View style={styles.singleMainRow}>
+              {/* Left Info Column */}
+              <TouchableOpacity
+                style={styles.singleInfoCol}
+                activeOpacity={0.8}
+                onPress={() => onOpenDetails?.(singleItem.id)}
+              >
+                <Text
+                  style={[
+                    styles.singleHabitName,
+                    {
+                      color: colors.textPrimary,
+                      textDecorationLine: singleDone ? 'line-through' : 'none',
+                      opacity: singleDone ? 0.75 : 1,
+                    },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {singleItem.name}
+                </Text>
 
-            return (
-              <View key={item.id}>
-                {index > 0 && <View style={[styles.itemDivider, { backgroundColor: skyConfig.isDarkContent ? '#F3F4F6' : '#2C3E48' }]} />}
+                {/* Big Streak Number + Unit */}
+                <View style={styles.singleNumberRow}>
+                  <Text style={[styles.singleStreakNumber, { color: colors.flameAccent }]}>
+                    {singleDone && !singleItem.userCheckedIn ? singleItem.currentStreak + 1 : singleItem.currentStreak}
+                  </Text>
+                  <Text style={[styles.singleStreakUnit, { color: colors.textSecondary }]}>
+                    {singleItem.currentStreak === 1 ? 'day streak' : 'days streak'}
+                  </Text>
+                </View>
 
-                <View style={styles.streakRow}>
-                  {/* Left: Streak Info */}
-                  <TouchableOpacity
-                    style={styles.streakInfo}
-                    activeOpacity={0.8}
-                    onPress={() => onOpenDetails?.(item.id)}
-                  >
-                    <View style={styles.titleWithFlame}>
-                      <View style={styles.flamePill}>
-                        <Ionicons name="flame" size={13} color="#FF9600" />
-                        <Text style={styles.flameCount}>{item.currentStreak}</Text>
-                      </View>
+                {/* Status Label */}
+                <Text
+                  style={[
+                    styles.singleStatusLabel,
+                    { color: singleDone ? colors.accentMint : colors.textSecondary },
+                  ]}
+                >
+                  {singleDone ? 'Completed today ✓' : `${singleItem.hoursRemaining}h remaining today`}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Right: Circular Check-in Action (Logo Matching Color #FF9600) */}
+              <TouchableOpacity
+                style={[
+                  styles.circleCheckButton,
+                  singleDone
+                    ? { backgroundColor: colors.checkBgDone, borderColor: colors.checkBgDone }
+                    : { backgroundColor: colors.checkBgPending, borderColor: colors.checkBorder },
+                ]}
+                onPress={() => handleCheckIn(singleItem)}
+                activeOpacity={0.7}
+                disabled={singleDone || singleLoading}
+              >
+                {singleLoading ? (
+                  <ActivityIndicator size="small" color={colors.flameAccent} />
+                ) : singleDone ? (
+                  <Ionicons name="checkmark" size={20} color="#FFFFFF" />
+                ) : (
+                  <View style={[styles.innerRingDot, { borderColor: colors.textSecondary }]} />
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Subtle 7-Day Progress Dots Row */}
+            <View style={styles.sevenDaysRow}>
+              {daysOfWeek.map((day, idx) => {
+                const isCurrent = idx === todayDayIndex;
+                const isPast = idx < todayDayIndex;
+                const isCheckedDay = isCurrent ? singleDone : isPast;
+
+                return (
+                  <View key={idx} style={styles.dayDotCol}>
+                    <Text
+                      style={[
+                        styles.dayDotText,
+                        {
+                          color: isCurrent
+                            ? colors.textPrimary
+                            : colors.textSecondary,
+                          fontWeight: isCurrent ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      {day}
+                    </Text>
+                    <View
+                      style={[
+                        styles.dayDot,
+                        {
+                          backgroundColor: isCheckedDay
+                            ? colors.dayDotActive
+                            : colors.dayDotInactive,
+                          borderWidth: isCurrent && !singleDone ? 1.5 : 0,
+                          borderColor: colors.flameAccent,
+                        },
+                      ]}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : (
+          /* 2. TWO-STREAK CONFIGURATION (Two Visually Distinct Intentional Rows) */
+          <View style={styles.twoStreaksContainer}>
+            {items.map((item, index) => {
+              const isDone = item.userCheckedIn || checkedMap[item.id];
+              const isLoading = Boolean(loadingMap[item.id]);
+
+              return (
+                <View key={item.id}>
+                  {index > 0 && <View style={[styles.rowDivider, { backgroundColor: colors.divider }]} />}
+
+                  <View style={styles.twoStreakRow}>
+                    {/* Habit Info */}
+                    <TouchableOpacity
+                      style={styles.twoStreakInfo}
+                      activeOpacity={0.8}
+                      onPress={() => onOpenDetails?.(item.id)}
+                    >
                       <Text
                         style={[
-                          styles.streakTitle,
+                          styles.twoStreakName,
                           {
-                            color: skyConfig.isDarkContent ? '#202F36' : '#FFFFFF',
+                            color: colors.textPrimary,
                             textDecorationLine: isDone ? 'line-through' : 'none',
-                            opacity: isDone ? 0.7 : 1,
+                            opacity: isDone ? 0.75 : 1,
                           },
                         ]}
                         numberOfLines={1}
                       >
                         {item.name}
                       </Text>
-                    </View>
 
-                    <Text
+                      <View style={styles.twoStreakMetaRow}>
+                        <Ionicons name="flame" size={13} color={colors.flameAccent} style={{ marginRight: 4 }} />
+                        <Text style={[styles.twoStreakCount, { color: colors.flameAccent }]}>
+                          {isDone && !item.userCheckedIn ? item.currentStreak + 1 : item.currentStreak}
+                          <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>
+                            {item.currentStreak === 1 ? ' day' : ' days'}
+                          </Text>
+                        </Text>
+                        <Text style={[styles.twoStreakStatus, { color: colors.textSecondary }]}>
+                          {isDone ? ' • Done ✓' : ` • ${item.hoursRemaining}h left`}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Circular Action Button (Matching Logo Flame Color) */}
+                    <TouchableOpacity
                       style={[
-                        styles.streakSubtitle,
-                        { color: skyConfig.isDarkContent ? '#777777' : '#9BA9B0' },
+                        styles.twoCircleButton,
+                        isDone
+                          ? { backgroundColor: colors.checkBgDone, borderColor: colors.checkBgDone }
+                          : { backgroundColor: colors.checkBgPending, borderColor: colors.checkBorder },
                       ]}
+                      onPress={() => handleCheckIn(item)}
+                      activeOpacity={0.7}
+                      disabled={isDone || isLoading}
                     >
-                      {isDone
-                        ? 'Completed today ✓'
-                        : `${item.hoursRemaining}h remaining today`}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Right: Chunky Interactive Checkbox */}
-                  <TouchableOpacity
-                    style={[
-                      styles.checkboxButton,
-                      isDone ? styles.checkboxCompleted : styles.checkboxPending,
-                      {
-                        backgroundColor: isDone ? '#58CC02' : '#F3F4F6',
-                        borderBottomColor: isDone ? '#46A302' : '#E5E7EB',
-                      },
-                    ]}
-                    onPress={() => handleCheckIn(item)}
-                    activeOpacity={0.7}
-                    disabled={isDone || isLoading}
-                  >
-                    {isLoading ? (
-                      <ActivityIndicator size="small" color="#58CC02" />
-                    ) : isDone ? (
-                      <Ionicons name="checkmark-sharp" size={20} color="#FFFFFF" />
-                    ) : (
-                      <View style={styles.checkboxInnerHole} />
-                    )}
-                  </TouchableOpacity>
+                      {isLoading ? (
+                        <ActivityIndicator size="small" color={colors.flameAccent} />
+                      ) : isDone ? (
+                        <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                      ) : (
+                        <View style={[styles.twoInnerRingDot, { borderColor: colors.textSecondary }]} />
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        )}
       </View>
 
       {/* Celebration Modal on Widget Check-In */}
@@ -253,126 +311,172 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 22,
-    borderWidth: 2,
-    padding: 16,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  emptyContent: {
-    paddingVertical: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyMascotCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#FFF4E5',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFE0B2',
-  },
-  mascotRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  mascotBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFF4E5',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#FFE0B2',
-    marginRight: 10,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  speechBubble: {
-    flex: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 14,
-    borderWidth: 1,
-  },
-  speechText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  streaksContainer: {
-    width: '100%',
-  },
-  streakRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    marginBottom: 10,
   },
-  itemDivider: {
-    height: 1,
-    width: '100%',
-    marginVertical: 4,
+  headerLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
   },
-  streakInfo: {
+  headerFlame: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyContainer: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  // Single Streak Styles
+  singleContainer: {
+    paddingVertical: 2,
+  },
+  singleMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  singleInfoCol: {
     flex: 1,
     paddingRight: 12,
   },
-  titleWithFlame: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  singleHabitName: {
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 20,
   },
-  flamePill: {
+  singleNumberRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF4E5',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#FFE0B2',
+    alignItems: 'baseline',
+    marginTop: 2,
   },
-  flameCount: {
+  singleStreakNumber: {
+    fontSize: 30,
+    fontWeight: '800',
+    lineHeight: 34,
+  },
+  singleStreakUnit: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#D97706',
-    marginLeft: 3,
+    fontWeight: '600',
+    marginLeft: 6,
   },
-  streakTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    flex: 1,
-  },
-  streakSubtitle: {
+  singleStatusLabel: {
     fontSize: 11,
     fontWeight: '600',
-    marginTop: 3,
+    marginTop: 2,
   },
-  checkboxButton: {
+  circleCheckButton: {
     width: 42,
     height: 42,
-    borderRadius: 14,
+    borderRadius: 21,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderBottomWidth: 4,
   },
-  checkboxPending: {
-    borderColor: '#E2E8F0',
-  },
-  checkboxCompleted: {
-    borderColor: '#46A302',
-  },
-  checkboxInnerHole: {
+  innerRingDot: {
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#CBD5E1',
+    borderWidth: 1.5,
+  },
+  sevenDaysRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 14,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(128, 128, 128, 0.12)',
+  },
+  dayDotCol: {
+    alignItems: 'center',
+  },
+  dayDotText: {
+    fontSize: 10,
+    marginBottom: 4,
+  },
+  dayDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  // Two Streak Styles
+  twoStreaksContainer: {
+    paddingVertical: 2,
+  },
+  twoStreakRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  rowDivider: {
+    height: 1,
+    width: '100%',
+    marginVertical: 6,
+  },
+  twoStreakInfo: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  twoStreakName: {
+    fontSize: 15,
+    fontWeight: '700',
+    lineHeight: 19,
+  },
+  twoStreakMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  twoStreakCount: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  twoStreakStatus: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  twoCircleButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  twoInnerRingDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 1.5,
   },
 });

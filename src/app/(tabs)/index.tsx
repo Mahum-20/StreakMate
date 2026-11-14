@@ -22,6 +22,7 @@ import { StreakCelebrationModal } from '@/components/modals/StreakCelebrationMod
 import { LivingSkyBackground } from '@/components/motion/LivingSkyBackground';
 import { streakService, StreakData } from '@/features/streaks/services/streakService';
 import { nudgeService, NudgeRecord } from '@/features/streaks/services/nudgeService';
+import { widgetService } from '@/features/widget/widgetService';
 import { calculatePeriodKey, getEndOfDay } from '@/core/utils/streakLogic';
 import { getTimeOfDayGreeting } from '@/core/environment/TimeOfDayEngine';
 
@@ -57,6 +58,7 @@ export default function HomeScreen() {
       user.uid,
       (liveStreaks) => {
         setStreaks(liveStreaks);
+        widgetService.syncToNativeWidget(liveStreaks, user.uid);
         setLoading(false);
         setRefreshing(false);
       },
@@ -135,6 +137,7 @@ export default function HomeScreen() {
     try {
       const result = await streakService.submitCheckIn(streakId, user.uid);
       setShowConfetti(true);
+      widgetService.syncToNativeWidget(streaks, user.uid);
       const target = streaks.find((s) => s.id === streakId);
       if (target) {
         const isSolo = Boolean(target.isSolo || (target.participantUids && target.participantUids.length === 1));

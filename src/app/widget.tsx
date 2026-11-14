@@ -45,10 +45,12 @@ export default function WidgetScreen() {
         const valid = savedPins.filter((id) => userStreaks.some((s: StreakData) => s.id === id));
         if (valid.length > 0) {
           setPinnedStreakIds(valid);
+          await widgetService.syncToNativeWidget(userStreaks, user.uid);
         } else if (userStreaks.length > 0) {
-          const defaultPins = userStreaks.slice(0, Math.min(2, userStreaks.length)).map((s: StreakData) => s.id);
+          const defaultPins = [userStreaks[0].id];
           setPinnedStreakIds(defaultPins);
           await widgetService.setPinnedStreakIds(defaultPins);
+          await widgetService.syncToNativeWidget(userStreaks, user.uid);
         }
         setLoading(false);
       },
@@ -84,6 +86,9 @@ export default function WidgetScreen() {
     }
     setPinnedStreakIds(next);
     await widgetService.setPinnedStreakIds(next);
+    if (user?.uid) {
+      await widgetService.syncToNativeWidget(streaks, user.uid);
+    }
   };
 
   return (

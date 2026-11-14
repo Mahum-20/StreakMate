@@ -68,6 +68,7 @@ export default function WidgetCheckInScreen() {
 
         // Submit check-in
         const res = await widgetService.quickCheckIn(targetStreakId, user.uid);
+        widgetService.syncToNativeWidget([streakData], user.uid);
 
         if (isMounted) {
           setLoading(false);

@@ -1,6 +1,9 @@
+import { NativeModules, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { streakService, StreakData } from '@/features/streaks/services/streakService';
 import { calculatePeriodKey, getEndOfDay } from '@/core/utils/streakLogic';
+
+const { StreakWidgetModule } = NativeModules;
 
 const WIDGET_PINNED_STREAK_KEY = '@streakmate/pinned_widget_streak_id';
 const WIDGET_PINNED_STREAKS_KEY = '@streakmate/pinned_widget_streak_ids';
@@ -126,6 +129,47 @@ export const widgetService = {
         allCompleted: false,
         message: err?.message || 'Check-in failed.',
       };
+    }
+  },
+
+  /**
+   * Syncs the current pinned streaks directly into native Android SharedPreferences
+   * and triggers an immediate AppWidget refresh so the home screen widget displays
+   * real habit names, real counts, and matching check-in status.
+   */
+  async syncToNativeWidget(streaks: StreakData[], userId: string): Promise<void> {
+    try {
+      if (Platform.OS !== 'android' || !StreakWidgetModule?.updateWidgetData) {
+        return;
+      }
+
+      let pinnedIds = await this.getPinnedStreakIds();
+      // If none pinned yet, default to single streak (not 2)
+      if (pinnedIds.length === 0 && streaks.length > 0) {
+        pinnedIds = [streaks[0].id];
+        await this.setPinnedStreakIds(pinnedIds);
+      }
+
+      const pinnedStreaks = pinnedIds
+        .map((id) => streaks.find((s) => s.id === id))
+        .filter((s): s is StreakData => Boolean(s));
+
+      const payload = {
+        streaks: pinnedStreaks.map((s) => {
+          const snap = this.buildSnapshot(s, userId);
+          return {
+            id: snap.id,
+            name: snap.name,
+            currentStreak: snap.currentStreak,
+            userCheckedIn: snap.userCheckedIn,
+            hoursRemaining: snap.hoursRemaining,
+          };
+        }),
+      };
+
+      StreakWidgetModule.updateWidgetData(JSON.stringify(payload));
+    } catch (err) {
+      console.warn('Failed to sync widget data to native Android:', err);
     }
   },
 };
