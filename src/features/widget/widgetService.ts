@@ -155,8 +155,20 @@ export const widgetService = {
       }
 
       let pinnedIds = await this.getPinnedStreakIds();
-      // If none pinned yet, default to single streak (not 2)
-      if (pinnedIds.length === 0 && streaks.length > 0) {
+      const capacityMode = await AsyncStorage.getItem('@streakmate/widget_capacity_mode');
+
+      // Keep only valid streak IDs that still exist in user's active streaks
+      pinnedIds = pinnedIds.filter((id) => streaks.some((s) => s.id === id));
+
+      // In 4x2 Duolingo widget mode, if user has >= 2 streaks and hasn't explicitly
+      // locked mode to 1 habit ('1'), automatically pin top 2 streaks!
+      if (capacityMode !== '1' && streaks.length >= 2) {
+        if (pinnedIds.length < 2) {
+          const remaining = streaks.filter((s) => !pinnedIds.includes(s.id));
+          pinnedIds = [...pinnedIds, ...remaining.map((s) => s.id)].slice(0, 2);
+          await this.setPinnedStreakIds(pinnedIds);
+        }
+      } else if (pinnedIds.length === 0 && streaks.length > 0) {
         pinnedIds = [streaks[0].id];
         await this.setPinnedStreakIds(pinnedIds);
       }

@@ -92,12 +92,12 @@ const withAndroidWidget = (config) => {
         }
       }
 
-      // 1. streak_widget_info.xml
+      // 1. streak_widget_info.xml (Standard 4x2 Android Home Screen Widget)
       const widgetInfoXml = `<?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:minWidth="180dp"
-    android:minHeight="86dp"
-    android:targetCellWidth="3"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="4"
     android:targetCellHeight="2"
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/streak_widget_layout"
@@ -108,29 +108,40 @@ const withAndroidWidget = (config) => {
 `;
       fs.writeFileSync(path.join(xmlDir, 'streak_widget_info.xml'), widgetInfoXml);
 
-      // 2. streak_widget_bg.xml (Rich Soft Sky: #172430 surface, #2A4053 border, 24dp corners)
+      // 2. streak_widget_bg.xml (Rich Soft Sky: #172430 surface, #2A4053 border, 22dp corners)
       const widgetBgXml = `<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <solid android:color="#172430" />
     <stroke android:width="1.5dp" android:color="#2A4053" />
-    <corners android:radius="24dp" />
+    <corners android:radius="22dp" />
 </shape>
 `;
       fs.writeFileSync(path.join(drawableDir, 'streak_widget_bg.xml'), widgetBgXml);
 
-      // 3. streak_widget_bubble_bg.xml (Cute speech bubble)
+      // 3. streak_widget_item_card_bg.xml (Duolingo-style elevated habit card surface)
+      const itemCardBgXml = `<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#213342" />
+    <stroke android:width="1dp" android:color="#2E465A" />
+    <corners android:radius="14dp" />
+</shape>
+`;
+      fs.writeFileSync(path.join(drawableDir, 'streak_widget_item_card_bg.xml'), itemCardBgXml);
+
+      // 4. streak_widget_bubble_bg.xml (Cute speech bubble)
       const bubbleBgXml = `<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
     <solid android:color="#293E50" />
     <stroke android:width="1dp" android:color="#3A566E" />
-    <corners android:radius="12dp" />
+    <corners android:radius="10dp" />
 </shape>
 `;
       fs.writeFileSync(path.join(drawableDir, 'streak_widget_bubble_bg.xml'), bubbleBgXml);
 
-      // 4. streak_widget_check_pending.xml (Subtle circular action button)
+      // 5. streak_widget_check_pending.xml (Subtle circular action button)
       const checkPendingXml = `<?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="oval">
@@ -140,7 +151,7 @@ const withAndroidWidget = (config) => {
 `;
       fs.writeFileSync(path.join(drawableDir, 'streak_widget_check_pending.xml'), checkPendingXml);
 
-      // 5. streak_widget_check_done.xml (Filled circle matching brand logo flame color #FF9600 with white checkmark)
+      // 6. streak_widget_check_done.xml (Filled circle matching brand logo flame color #FF9600 with white checkmark)
       const checkDoneXml = `<?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
@@ -157,7 +168,7 @@ const withAndroidWidget = (config) => {
 `;
       fs.writeFileSync(path.join(drawableDir, 'streak_widget_check_done.xml'), checkDoneXml);
 
-      // 6. streak_widget_layout.xml (Duolingo-level character-driven widget)
+      // 7. streak_widget_layout.xml (Duolingo 4x2 character-driven widget layout)
       const widgetLayoutXml = `<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_container"
@@ -165,12 +176,14 @@ const withAndroidWidget = (config) => {
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/streak_widget_bg"
-    android:paddingLeft="14dp"
-    android:paddingRight="14dp"
-    android:paddingTop="12dp"
-    android:paddingBottom="12dp">
+    android:paddingLeft="12dp"
+    android:paddingRight="12dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
 
-    <!-- Layout C: Celebration Container (Shown when all pinned habits done!) -->
+    <!-- ========================================================== -->
+    <!-- Layout C: Celebration Container (When all habits are done) -->
+    <!-- ========================================================== -->
     <LinearLayout
         android:id="@+id/celebration_container"
         android:layout_width="match_parent"
@@ -179,19 +192,48 @@ const withAndroidWidget = (config) => {
         android:gravity="center_vertical"
         android:visibility="gone">
 
-        <ImageView
-            android:id="@+id/celebration_mascot"
-            android:layout_width="66dp"
-            android:layout_height="66dp"
-            android:src="@drawable/widget_mascot_complete"
-            android:scaleType="fitCenter" />
+        <!-- Left Mascot Stage -->
+        <LinearLayout
+            android:layout_width="86dp"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center">
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/streak_widget_bubble_bg"
+                android:paddingLeft="6dp"
+                android:paddingRight="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:text="GREAT JOB! ⭐"
+                android:textColor="#FF9600"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/celebration_mascot"
+                android:layout_width="66dp"
+                android:layout_height="66dp"
+                android:layout_marginTop="3dp"
+                android:src="@drawable/widget_mascot_complete"
+                android:scaleType="fitCenter" />
+        </LinearLayout>
+
+        <!-- Right Celebration Content Card -->
         <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:orientation="vertical"
-            android:layout_marginLeft="10dp">
+            android:gravity="center_vertical"
+            android:background="@drawable/streak_widget_item_card_bg"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:layout_marginLeft="8dp">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -208,86 +250,84 @@ const withAndroidWidget = (config) => {
                 android:layout_height="wrap_content"
                 android:text="All Done Today!"
                 android:textColor="#EDF3F1"
-                android:textSize="16sp"
+                android:textSize="15sp"
                 android:textStyle="bold"
-                android:layout_marginTop="1dp" />
+                android:layout_marginTop="2dp" />
 
             <TextView
                 android:id="@+id/celebration_subtitle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Streak protected • See you tomorrow 🌤️"
+                android:text="Streaks protected • See you tomorrow 🌤️"
                 android:textColor="#77D2C5"
                 android:textSize="11sp"
                 android:layout_marginTop="2dp" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Layout A: Single Streak Hero Container -->
+    <!-- ========================================================== -->
+    <!-- Layout A: Single Streak Hero Container (4x2 Mascot + Card) -->
+    <!-- ========================================================== -->
     <LinearLayout
         android:id="@+id/single_streak_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:visibility="visible">
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
 
-        <!-- Header with speech bubble -->
+        <!-- Left Mascot Stage -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="6dp">
+            android:layout_width="86dp"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center">
 
             <TextView
                 android:id="@+id/single_speech_bubble"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@drawable/streak_widget_bubble_bg"
-                android:paddingLeft="8dp"
-                android:paddingRight="8dp"
-                android:paddingTop="3dp"
-                android:paddingBottom="3dp"
-                android:text="Ready to conquer today? ☀️"
+                android:paddingLeft="6dp"
+                android:paddingRight="6dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:text="Ready? ☀️"
                 android:textColor="#77D2C5"
-                android:textSize="10sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/single_header_date"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="end"
-                android:text="TODAY • 1 HABIT"
-                android:textColor="#9EB3AF"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:textStyle="bold"
-                android:letterSpacing="0.08" />
-        </LinearLayout>
-
-        <!-- Mascot + Info + Button Row -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+                android:maxLines="1"
+                android:ellipsize="end" />
 
             <ImageView
                 android:id="@+id/single_streak_mascot"
-                android:layout_width="60dp"
-                android:layout_height="60dp"
+                android:layout_width="66dp"
+                android:layout_height="66dp"
+                android:layout_marginTop="3dp"
                 android:src="@drawable/widget_mascot_morning"
                 android:scaleType="fitCenter" />
+        </LinearLayout>
+
+        <!-- Right Hero Habit Card -->
+        <LinearLayout
+            android:id="@+id/single_streak_action_area"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/streak_widget_item_card_bg"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:layout_marginLeft="8dp">
 
             <LinearLayout
-                android:id="@+id/single_streak_action_area"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:orientation="vertical"
-                android:layout_marginLeft="8dp">
+                android:orientation="vertical">
 
                 <TextView
                     android:id="@+id/single_streak_name"
@@ -305,22 +345,22 @@ const withAndroidWidget = (config) => {
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="bottom"
-                    android:layout_marginTop="1dp">
+                    android:layout_marginTop="2dp">
 
                     <TextView
                         android:id="@+id/single_streak_number"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="1"
+                        android:text="14"
                         android:textColor="#FFA21A"
-                        android:textSize="28sp"
+                        android:textSize="26sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/single_streak_unit"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="day streak"
+                        android:text="days 🔥"
                         android:textColor="#9EB3AF"
                         android:textSize="11sp"
                         android:layout_marginLeft="5dp"
@@ -333,195 +373,214 @@ const withAndroidWidget = (config) => {
                     android:layout_height="wrap_content"
                     android:text="Tap button to check in"
                     android:textColor="#77D2C5"
-                    android:textSize="11sp" />
+                    android:textSize="10sp"
+                    android:layout_marginTop="1dp" />
             </LinearLayout>
 
             <ImageView
                 android:id="@+id/single_streak_checkbox"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:src="@drawable/streak_widget_check_pending"
-                android:layout_marginLeft="6dp" />
+                android:layout_marginLeft="8dp" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Layout B: Two Streaks Container (Duo Rhythm Primary) -->
+    <!-- ========================================================== -->
+    <!-- Layout B: Two Streaks Container (Duolingo 4x2 Duo Cards)   -->
+    <!-- ========================================================== -->
     <LinearLayout
         android:id="@+id/two_streak_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:visibility="gone">
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="visible">
 
-        <!-- Header with Mini Nimbus Avatar -->
+        <!-- Left Mascot Stage -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="4dp">
+            android:layout_width="86dp"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center">
 
-            <ImageView
-                android:id="@+id/two_mascot_avatar"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
-                android:src="@drawable/widget_mascot_morning"
-                android:scaleType="fitCenter" />
-
+            <!-- Speech bubble -->
             <TextView
                 android:id="@+id/two_speech_bubble"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@drawable/streak_widget_bubble_bg"
-                android:paddingLeft="7dp"
-                android:paddingRight="7dp"
+                android:paddingLeft="6dp"
+                android:paddingRight="6dp"
                 android:paddingTop="2dp"
                 android:paddingBottom="2dp"
-                android:text="Keep it going! ✨"
+                android:text="2 HABITS! ✨"
                 android:textColor="#77D2C5"
-                android:textSize="10sp"
+                android:textSize="9sp"
                 android:textStyle="bold"
-                android:layout_marginLeft="4dp" />
+                android:maxLines="1"
+                android:ellipsize="end" />
 
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:gravity="end"
-                android:text="2 HABITS"
-                android:textColor="#9EB3AF"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:letterSpacing="0.08" />
+            <!-- Mascot Character -->
+            <ImageView
+                android:id="@+id/two_streak_mascot"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:layout_marginTop="3dp"
+                android:src="@drawable/widget_mascot_morning"
+                android:scaleType="fitCenter" />
         </LinearLayout>
 
-        <!-- Row 1 -->
+        <!-- Right Column: Two distinct elevated habit cards -->
         <LinearLayout
-            android:id="@+id/two_streak_1_row"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
             android:gravity="center_vertical"
-            android:paddingTop="2dp"
-            android:paddingBottom="2dp">
+            android:layout_marginLeft="8dp">
 
+            <!-- Habit 1 Card -->
             <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:id="@+id/two_streak_1_card"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/streak_widget_item_card_bg"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp">
 
-                <TextView
-                    android:id="@+id/two_streak_1_name"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Habit 1"
-                    android:textColor="#EDF3F1"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/two_streak_1_count"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="14 days"
-                    android:textColor="#FFA21A"
-                    android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/two_streak_1_name"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Habit 1"
+                        android:textColor="#EDF3F1"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:maxLines="1"
+                        android:ellipsize="end" />
+
+                    <TextView
+                        android:id="@+id/two_streak_1_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="14 days 🔥"
+                        android:textColor="#FFA21A"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <ImageView
+                    android:id="@+id/two_streak_1_checkbox"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/streak_widget_check_pending"
+                    android:layout_marginLeft="6dp" />
             </LinearLayout>
 
-            <ImageView
-                android:id="@+id/two_streak_1_checkbox"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:src="@drawable/streak_widget_check_pending"
-                android:layout_marginLeft="8dp" />
-        </LinearLayout>
-
-        <!-- Divider -->
-        <ImageView
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="#223642"
-            android:layout_marginTop="3dp"
-            android:layout_marginBottom="3dp" />
-
-        <!-- Row 2 -->
-        <LinearLayout
-            android:id="@+id/two_streak_2_row"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingTop="2dp"
-            android:paddingBottom="2dp">
-
+            <!-- Habit 2 Card with 6dp top margin for separation -->
             <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:id="@+id/two_streak_2_card"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
                 android:layout_weight="1"
-                android:orientation="vertical">
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/streak_widget_item_card_bg"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:layout_marginTop="6dp">
 
-                <TextView
-                    android:id="@+id/two_streak_2_name"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Habit 2"
-                    android:textColor="#EDF3F1"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/two_streak_2_count"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="7 days"
-                    android:textColor="#FFA21A"
-                    android:textSize="12sp" />
+                    <TextView
+                        android:id="@+id/two_streak_2_name"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Habit 2"
+                        android:textColor="#EDF3F1"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:maxLines="1"
+                        android:ellipsize="end" />
+
+                    <TextView
+                        android:id="@+id/two_streak_2_count"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="7 days 🔥"
+                        android:textColor="#FFA21A"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <ImageView
+                    android:id="@+id/two_streak_2_checkbox"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/streak_widget_check_pending"
+                    android:layout_marginLeft="6dp" />
             </LinearLayout>
-
-            <ImageView
-                android:id="@+id/two_streak_2_checkbox"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:src="@drawable/streak_widget_check_pending"
-                android:layout_marginLeft="8dp" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Empty Container -->
+    <!-- ========================================================== -->
+    <!-- Empty Container                                            -->
+    <!-- ========================================================== -->
     <LinearLayout
         android:id="@+id/empty_widget_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:gravity="center"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
         android:visibility="gone">
 
         <ImageView
-            android:layout_width="48dp"
-            android:layout_height="48dp"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
             android:src="@drawable/widget_mascot_morning"
             android:scaleType="fitCenter" />
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="No habits pinned"
-            android:textColor="#EDF3F1"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:layout_marginTop="4dp" />
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginLeft="12dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Tap to select habits in StreakMate"
-            android:textColor="#9EB3AF"
-            android:textSize="11sp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No habits pinned"
+                android:textColor="#EDF3F1"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tap to select habits in StreakMate"
+                android:textColor="#9EB3AF"
+                android:textSize="11sp"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
     </LinearLayout>
 </LinearLayout>
 `;
@@ -557,23 +616,28 @@ class StreakWidgetProvider : AppWidgetProvider() {
 
         // Time-of-day mascot selection & speech bubble
         val mascotResId: Int
-        val speechBubbleText: String
+        val speechBubbleTextSingle: String
+        val speechBubbleTextTwo: String
         when {
             hour in 5..11 -> {
                 mascotResId = R.drawable.widget_mascot_morning
-                speechBubbleText = "Good morning! Ready? ✨"
+                speechBubbleTextSingle = "Ready? ☀️"
+                speechBubbleTextTwo = "2 HABITS! ✨"
             }
             hour in 12..16 -> {
                 mascotResId = R.drawable.widget_mascot_afternoon
-                speechBubbleText = "Keep it going! 🌤️"
+                speechBubbleTextSingle = "Keep going! 🌤️"
+                speechBubbleTextTwo = "Keep going! 🌤️"
             }
             hour in 17..20 -> {
                 mascotResId = R.drawable.widget_mascot_evening
-                speechBubbleText = "Check in tonight! ⏰"
+                speechBubbleTextSingle = "Check in! ⏰"
+                speechBubbleTextTwo = "Check in! ⏰"
             }
             else -> {
                 mascotResId = R.drawable.widget_mascot_night
-                speechBubbleText = "Save our streak! 🌙"
+                speechBubbleTextSingle = "Save streak! 🌙"
+                speechBubbleTextTwo = "Save both! 🌙"
             }
         }
 
@@ -646,8 +710,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.single_streak_container, View.VISIBLE)
 
                     views.setImageViewResource(R.id.single_streak_mascot, mascotResId)
-                    views.setTextViewText(R.id.single_speech_bubble, speechBubbleText)
-                    views.setTextViewText(R.id.single_header_date, "TODAY • $todayDate")
+                    views.setTextViewText(R.id.single_speech_bubble, speechBubbleTextSingle)
 
                     val streakObj = streaksArray!!.getJSONObject(0)
                     val streakId = streakObj.optString("id", "")
@@ -657,7 +720,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
 
                     views.setTextViewText(R.id.single_streak_name, name)
                     views.setTextViewText(R.id.single_streak_number, "$count")
-                    views.setTextViewText(R.id.single_streak_unit, if (count == 1) "day streak" else "days streak")
+                    views.setTextViewText(R.id.single_streak_unit, if (count == 1) "day 🔥" else "days 🔥")
 
                     if (isCheckedIn) {
                         views.setTextViewText(R.id.single_streak_status, "Completed today ✓")
@@ -681,14 +744,14 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     views.setOnClickPendingIntent(R.id.single_streak_checkbox, checkInPending)
 
                 } else {
-                    // Layout B: Two Streaks (Duo Rhythm)
+                    // Layout B: Two Streaks (Duolingo 4x2 Duo Layout)
                     views.setViewVisibility(R.id.celebration_container, View.GONE)
                     views.setViewVisibility(R.id.empty_widget_container, View.GONE)
                     views.setViewVisibility(R.id.single_streak_container, View.GONE)
                     views.setViewVisibility(R.id.two_streak_container, View.VISIBLE)
 
-                    views.setImageViewResource(R.id.two_mascot_avatar, mascotResId)
-                    views.setTextViewText(R.id.two_speech_bubble, speechBubbleText)
+                    // Mascot Stage
+                    views.setImageViewResource(R.id.two_streak_mascot, mascotResId)
 
                     // Streak 1
                     val s1 = streaksArray!!.getJSONObject(0)
@@ -698,7 +761,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     val s1Checked = s1.optBoolean("userCheckedIn", false)
 
                     views.setTextViewText(R.id.two_streak_1_name, s1Name)
-                    views.setTextViewText(R.id.two_streak_1_count, "$s1Count " + (if (s1Count == 1) "day" else "days"))
+                    views.setTextViewText(R.id.two_streak_1_count, "$s1Count " + (if (s1Count == 1) "day 🔥" else "days 🔥"))
                     if (s1Checked) {
                         views.setImageViewResource(R.id.two_streak_1_checkbox, R.drawable.streak_widget_check_done)
                     } else {
@@ -716,6 +779,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
                     views.setOnClickPendingIntent(R.id.two_streak_1_checkbox, checkIn1Pending)
+                    views.setOnClickPendingIntent(R.id.two_streak_1_card, checkIn1Pending)
 
                     // Streak 2
                     val s2 = streaksArray.getJSONObject(1)
@@ -725,7 +789,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     val s2Checked = s2.optBoolean("userCheckedIn", false)
 
                     views.setTextViewText(R.id.two_streak_2_name, s2Name)
-                    views.setTextViewText(R.id.two_streak_2_count, "$s2Count " + (if (s2Count == 1) "day" else "days"))
+                    views.setTextViewText(R.id.two_streak_2_count, "$s2Count " + (if (s2Count == 1) "day 🔥" else "days 🔥"))
                     if (s2Checked) {
                         views.setImageViewResource(R.id.two_streak_2_checkbox, R.drawable.streak_widget_check_done)
                     } else {
@@ -743,6 +807,12 @@ class StreakWidgetProvider : AppWidgetProvider() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
                     views.setOnClickPendingIntent(R.id.two_streak_2_checkbox, checkIn2Pending)
+                    views.setOnClickPendingIntent(R.id.two_streak_2_card, checkIn2Pending)
+
+                    // Speech bubble: dynamic count
+                    val completedCount = (if (s1Checked) 1 else 0) + (if (s2Checked) 1 else 0)
+                    val twoSpeech = if (completedCount == 1) "1 left! 🔥" else speechBubbleTextTwo
+                    views.setTextViewText(R.id.two_speech_bubble, twoSpeech)
                 }
 
                 appWidgetManager.updateAppWidget(appWidgetId, views)

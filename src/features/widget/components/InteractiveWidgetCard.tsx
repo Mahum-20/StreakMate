@@ -253,80 +253,84 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
           </View>
         ) : (
           /* ========================================================== */
-          /* LAYOUT B: TWO STREAKS (Duo Rhythm Primary Layout)          */
+          /* LAYOUT B: TWO STREAKS (Duolingo 4x2 Duo Layout)            */
           /* ========================================================== */
-          <View>
-            {/* Header: Mascot avatar + Speech Bubble + Summary */}
-            <View style={styles.twoHeaderRow}>
-              <Image
-                source={mascotSource}
-                style={styles.twoMascotAvatar}
-                contentFit="contain"
-              />
+          <View style={styles.twoMainContainer}>
+            {/* Left Mascot Stage */}
+            <View style={styles.twoMascotStage}>
               <View style={[styles.speechBubbleMini, { backgroundColor: colors.bubbleBg, borderColor: colors.border }]}>
                 <Text style={[styles.speechBubbleTextMini, { color: colors.mint }]}>
                   {mascotContext.speechBubble}
                 </Text>
               </View>
-              <Text style={[styles.headerDateLabel, { color: colors.textSecondary, marginLeft: 'auto' }]}>
-                2 HABITS
-              </Text>
+              <Image
+                source={mascotSource}
+                style={styles.twoMascotImage}
+                contentFit="contain"
+              />
             </View>
 
-            {/* Habit Rows */}
-            <View style={{ marginTop: 8 }}>
+            {/* Right Habit Cards */}
+            <View style={styles.twoCardsColumn}>
               {items.map((item, index) => {
                 const isDone = item.userCheckedIn || checkedMap[item.id];
                 const isLoading = loadingMap[item.id];
 
                 return (
-                  <View key={item.id}>
-                    {index > 0 && <View style={[styles.twoDivider, { backgroundColor: colors.border }]} />}
-                    <View style={styles.twoHabitRow}>
-                      {/* Left: Info */}
-                      <TouchableOpacity
-                        style={{ flex: 1, marginRight: 10 }}
-                        activeOpacity={0.7}
-                        onPress={() => onOpenDetails?.(item.id)}
-                      >
-                        <Text style={[styles.twoHabitName, { color: colors.textPrimary }]} numberOfLines={1}>
-                          {item.name}
+                  <View
+                    key={item.id}
+                    style={[
+                      styles.twoHabitCard,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                        marginTop: index > 0 ? 8 : 0,
+                      },
+                    ]}
+                  >
+                    {/* Left: Info */}
+                    <TouchableOpacity
+                      style={{ flex: 1, marginRight: 8 }}
+                      activeOpacity={0.7}
+                      onPress={() => onOpenDetails?.(item.id)}
+                    >
+                      <Text style={[styles.twoHabitName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                        <Ionicons name="flame" size={14} color={colors.flame} style={{ marginRight: 3 }} />
+                        <Text style={[styles.twoStreakCount, { color: colors.flameGold }]}>
+                          {isDone && !item.userCheckedIn ? item.currentStreak + 1 : item.currentStreak}
+                          <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>
+                            {item.currentStreak === 1 ? ' day' : ' days'}
+                          </Text>
                         </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-                          <Ionicons name="flame" size={14} color={colors.flame} style={{ marginRight: 3 }} />
-                          <Text style={[styles.twoStreakCount, { color: colors.flameGold }]}>
-                            {isDone && !item.userCheckedIn ? item.currentStreak + 1 : item.currentStreak}
-                            <Text style={{ color: colors.textSecondary, fontWeight: '500' }}>
-                              {item.currentStreak === 1 ? ' day' : ' days'}
-                            </Text>
-                          </Text>
-                          <Text style={[styles.twoStreakStatus, { color: isDone ? colors.mint : colors.textSecondary }]}>
-                            {isDone ? ' • Done ✓' : ` • ${item.hoursRemaining}h left`}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
+                        <Text style={[styles.twoStreakStatus, { color: isDone ? colors.mint : colors.textSecondary }]}>
+                          {isDone ? ' • Done ✓' : ` • ${item.hoursRemaining}h left`}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
 
-                      {/* Right: Circular Check-In Button */}
-                      <TouchableOpacity
-                        style={[
-                          styles.twoCircleButton,
-                          isDone
-                            ? { backgroundColor: colors.checkDoneBg, borderColor: colors.checkDoneBg }
-                            : { backgroundColor: colors.checkPendingBg, borderColor: colors.checkPendingBorder },
-                        ]}
-                        onPress={() => handleCheckIn(item)}
-                        activeOpacity={0.7}
-                        disabled={isDone || isLoading}
-                      >
-                        {isLoading ? (
-                          <ActivityIndicator size="small" color={colors.flame} />
-                        ) : isDone ? (
-                          <Ionicons name="checkmark" size={18} color="#FFFFFF" />
-                        ) : (
-                          <View style={[styles.twoInnerRingDot, { borderColor: colors.textSecondary }]} />
-                        )}
-                      </TouchableOpacity>
-                    </View>
+                    {/* Right: Circular Check-In Button */}
+                    <TouchableOpacity
+                      style={[
+                        styles.twoCircleButton,
+                        isDone
+                          ? { backgroundColor: colors.checkDoneBg, borderColor: colors.checkDoneBg }
+                          : { backgroundColor: colors.checkPendingBg, borderColor: colors.checkPendingBorder },
+                      ]}
+                      onPress={() => handleCheckIn(item)}
+                      activeOpacity={0.7}
+                      disabled={isDone || isLoading}
+                    >
+                      {isLoading ? (
+                        <ActivityIndicator size="small" color={colors.flame} />
+                      ) : isDone ? (
+                        <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                      ) : (
+                        <View style={[styles.twoInnerRingDot, { borderColor: colors.textSecondary }]} />
+                      )}
+                    </TouchableOpacity>
                   </View>
                 );
               })}
@@ -456,7 +460,35 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     borderWidth: 2,
   },
-  // Two Streaks Layout
+  // Two Streaks Duolingo 4x2 Layout
+  twoMainContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  twoMascotStage: {
+    width: 86,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  twoMascotImage: {
+    width: 64,
+    height: 64,
+    marginTop: 4,
+  },
+  twoCardsColumn: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  twoHabitCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
   twoHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -488,11 +520,11 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   twoHabitName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
   twoStreakCount: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
   },
   twoStreakStatus: {
@@ -501,9 +533,9 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   twoCircleButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',

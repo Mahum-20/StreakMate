@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,16 +44,34 @@ export default function WidgetScreen() {
       async (userStreaks) => {
         setStreaks(userStreaks);
         const savedPins = await widgetService.getPinnedStreakIds();
+        const capacityMode = await AsyncStorage.getItem('@streakmate/widget_capacity_mode');
         const valid = savedPins.filter((id) => userStreaks.some((s: StreakData) => s.id === id));
-        if (valid.length > 0) {
-          setPinnedStreakIds(valid);
-          setTargetCapacity(valid.length === 2 ? 2 : 1);
-          await widgetService.syncToNativeWidget(userStreaks, user.uid);
-        } else if (userStreaks.length > 0) {
-          const defaultPins = [userStreaks[0].id];
-          setPinnedStreakIds(defaultPins);
+
+        if (capacityMode === '1') {
+          // Explicitly 1 habit mode
+          const single = valid.length > 0 ? [valid[0]] : userStreaks.length > 0 ? [userStreaks[0].id] : [];
+          setPinnedStreakIds(single);
           setTargetCapacity(1);
-          await widgetService.setPinnedStreakIds(defaultPins);
+          if (single.length > 0) {
+            await widgetService.setPinnedStreakIds(single);
+            await widgetService.syncToNativeWidget(userStreaks, user.uid);
+          }
+        } else if (userStreaks.length >= 2) {
+          // Default: 2 Habits for 4x2 Duolingo widget
+          let duo = valid.slice(0, 2);
+          if (duo.length < 2) {
+            const others = userStreaks.filter((s: StreakData) => !duo.includes(s.id));
+            duo = [...duo, ...others.map((s: StreakData) => s.id)].slice(0, 2);
+          }
+          setPinnedStreakIds(duo);
+          setTargetCapacity(2);
+          await widgetService.setPinnedStreakIds(duo);
+          await widgetService.syncToNativeWidget(userStreaks, user.uid);
+        } else if (userStreaks.length === 1) {
+          const single = [userStreaks[0].id];
+          setPinnedStreakIds(single);
+          setTargetCapacity(1);
+          await widgetService.setPinnedStreakIds(single);
           await widgetService.syncToNativeWidget(userStreaks, user.uid);
         }
         setLoading(false);
@@ -189,6 +208,7 @@ export default function WidgetScreen() {
               activeOpacity={0.8}
               onPress={async () => {
                 setTargetCapacity(1);
+                await AsyncStorage.setItem('@streakmate/widget_capacity_mode', '1');
                 if (pinnedStreakIds.length > 1) {
                   const next = [pinnedStreakIds[0]];
                   setPinnedStreakIds(next);
@@ -230,6 +250,7 @@ export default function WidgetScreen() {
               activeOpacity={0.8}
               onPress={async () => {
                 setTargetCapacity(2);
+                await AsyncStorage.setItem('@streakmate/widget_capacity_mode', '2');
                 if (pinnedStreakIds.length === 1 && streaks.length > 1) {
                   const second = streaks.find((s) => s.id !== pinnedStreakIds[0]);
                   if (second) {

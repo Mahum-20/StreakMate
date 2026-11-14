@@ -4,6 +4,7 @@ import {
   addDoc,
   setDoc,
   getDoc,
+  getDocs,
   onSnapshot,
   query,
   where,
@@ -242,6 +243,23 @@ export const streakService = {
     } catch (err) {
       console.warn('getStreak error:', err);
       return null;
+    }
+  },
+
+  /**
+   * Fetches all active streaks for a user once.
+   */
+  async getUserStreaks(userId: string): Promise<StreakData[]> {
+    try {
+      const q = query(
+        collection(db, 'streaks'),
+        where('participantUids', 'array-contains', userId)
+      );
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map((docSnap) => mapStreakData(docSnap.id, docSnap.data()));
+    } catch (err) {
+      console.warn('getUserStreaks error:', err);
+      return [];
     }
   },
 
