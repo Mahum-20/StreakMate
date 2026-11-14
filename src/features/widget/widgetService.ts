@@ -115,12 +115,23 @@ export const widgetService = {
    * Performs an instant one-tap check-in directly for the interactive widget
    * without needing to open the full streak screen.
    */
-  async quickCheckIn(streakId: string, userId: string): Promise<{ success: boolean; allCompleted: boolean; message: string }> {
+  async quickCheckIn(
+    streakId: string,
+    userId: string
+  ): Promise<{
+    success: boolean;
+    allCompleted: boolean;
+    message: string;
+    earnedFreeze?: boolean;
+    freezesRemaining?: number;
+  }> {
     try {
       const result = await streakService.submitCheckIn(streakId, userId);
       return {
         success: true,
         allCompleted: result.allCompleted,
+        earnedFreeze: result.earnedFreeze,
+        freezesRemaining: result.freezesRemaining,
         message: result.allCompleted ? 'Streak saved for today!' : 'Your check-in is recorded!',
       };
     } catch (err: any) {

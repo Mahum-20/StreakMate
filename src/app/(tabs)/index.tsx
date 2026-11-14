@@ -141,15 +141,22 @@ export default function HomeScreen() {
       const target = streaks.find((s) => s.id === streakId);
       if (target) {
         const isSolo = Boolean(target.isSolo || (target.participantUids && target.participantUids.length === 1));
+        const finalCount = result.allCompleted ? result.streakCount : target.currentStreak;
+        let message = isSolo
+          ? "You completed today's streak! Fantastic work maintaining consistency."
+          : result.allCompleted
+          ? "Both you and your friend have completed check-ins! Streak extended! 🔥"
+          : "Your check-in is saved! Ping your friend to lock in today's streak.";
+
+        if (result.earnedFreeze) {
+          message = `🎉 20-Day Milestone reached! You earned +1 Streak Freeze 🧊 (${result.freezesRemaining} total)!`;
+        }
+
         setCelebrationData({
           visible: true,
           name: target.name,
-          count: result.allCompleted ? target.currentStreak + 1 : target.currentStreak,
-          message: isSolo
-            ? "You completed today's streak! Fantastic work maintaining consistency."
-            : result.allCompleted
-            ? "Both you and your friend have completed check-ins! Streak extended! 🔥"
-            : "Your check-in is saved! Ping your friend to lock in today's streak.",
+          count: finalCount,
+          message,
         });
       }
     } catch (err) {
@@ -456,6 +463,7 @@ export default function HomeScreen() {
                       friendAvatarUrl={card.friendAvatar}
                       currentStreak={streak.currentStreak}
                       status={streak.status}
+                      freezesRemaining={streak.freezesRemaining ?? 2}
                       hoursRemaining={card.hoursRemaining}
                       userCheckedIn={card.userCheckedIn}
                       friendCheckedIn={card.friendCheckedIn}
@@ -490,6 +498,7 @@ export default function HomeScreen() {
                       friendAvatarUrl={card.friendAvatar}
                       currentStreak={streak.currentStreak}
                       status={streak.status}
+                      freezesRemaining={streak.freezesRemaining ?? 2}
                       hoursRemaining={card.hoursRemaining}
                       userCheckedIn={card.userCheckedIn}
                       friendCheckedIn={card.friendCheckedIn}

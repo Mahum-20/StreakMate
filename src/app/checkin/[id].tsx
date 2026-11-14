@@ -77,17 +77,23 @@ export default function WidgetCheckInScreen() {
             (streakData.participantUids && streakData.participantUids.length === 1)
           );
 
+          let message = res.success
+            ? isSolo
+              ? "You completed today's streak! Momentum secured."
+              : res.allCompleted
+              ? "Both you and your friend have completed check-ins! Streak extended! 🔥"
+              : "Your check-in is recorded! Nudge your friend to lock it in."
+            : res.message;
+
+          if (res.earnedFreeze) {
+            message = `🎉 20-Day Milestone reached! You earned +1 Streak Freeze 🧊 (${res.freezesRemaining} total)!`;
+          }
+
           setCelebrationData({
             visible: true,
             name: streakData.name,
             count: res.allCompleted ? streakData.currentStreak + 1 : streakData.currentStreak,
-            message: res.success
-              ? isSolo
-                ? "You completed today's streak! Momentum secured."
-                : res.allCompleted
-                ? "Both you and your friend have completed check-ins! Streak extended! 🔥"
-                : "Your check-in is recorded! Nudge your friend to lock it in."
-              : res.message,
+            message,
           });
         }
       } catch (err) {

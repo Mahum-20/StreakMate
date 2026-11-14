@@ -14,6 +14,7 @@ export interface StreakCardProps {
   friendAvatarUrl?: string | null;
   currentStreak: number;
   status: 'active' | 'at_risk' | 'broken' | 'paused' | 'frozen';
+  freezesRemaining?: number;
   hoursRemaining?: number;
   userCheckedIn: boolean;
   friendCheckedIn: boolean;
@@ -28,6 +29,7 @@ export const StreakCard: React.FC<StreakCardProps> = ({
   friendAvatarUrl,
   currentStreak,
   status,
+  freezesRemaining,
   hoursRemaining,
   userCheckedIn,
   friendCheckedIn,
@@ -49,7 +51,7 @@ export const StreakCard: React.FC<StreakCardProps> = ({
   const getStatusBadge = (): { label: string; variant: BadgeVariant } => {
     if (status === 'broken') return { label: 'Broken', variant: 'broken' };
     if (status === 'paused') return { label: 'Paused', variant: 'neutral' };
-    if (status === 'frozen') return { label: 'Frozen', variant: 'neutral' };
+    if (status === 'frozen') return { label: 'Protected 🧊', variant: 'neutral' };
     if (status === 'at_risk' || (hoursRemaining !== undefined && hoursRemaining <= 3)) {
       return {
         label: hoursRemaining ? `${hoursRemaining}h left` : 'At Risk',
@@ -103,7 +105,42 @@ export const StreakCard: React.FC<StreakCardProps> = ({
             </>
           )}
         </View>
-        <Badge label={badgeInfo.label} variant={badgeInfo.variant} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {freezesRemaining !== undefined && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: sky?.skyConfig.isDarkContent
+                  ? 'rgba(119, 210, 197, 0.18)'
+                  : 'rgba(85, 185, 173, 0.22)',
+                paddingHorizontal: 7,
+                paddingVertical: 3,
+                borderRadius: borderRadius.sm,
+              }}
+            >
+              <Ionicons
+                name="snow"
+                size={11}
+                color={status === 'frozen' ? '#55B9AD' : textSecondary}
+                style={{ marginRight: 3 }}
+              />
+              <Text
+                style={[
+                  typography.caption,
+                  {
+                    color: status === 'frozen' ? '#55B9AD' : textSecondary,
+                    fontWeight: '700',
+                    fontSize: 11,
+                  },
+                ]}
+              >
+                {freezesRemaining}
+              </Text>
+            </View>
+          )}
+          <Badge label={badgeInfo.label} variant={badgeInfo.variant} />
+        </View>
       </View>
 
       {/* Middle row: Streak Name and Streak Counter */}
@@ -119,15 +156,26 @@ export const StreakCard: React.FC<StreakCardProps> = ({
 
         <View style={styles.counterRow}>
           <Ionicons
-            name="flame"
+            name={status === 'frozen' ? 'snow' : 'flame'}
             size={24}
-            color={status === 'broken' ? colors.textMuted : accentColor}
+            color={
+              status === 'broken'
+                ? colors.textMuted
+                : status === 'frozen'
+                ? '#55B9AD'
+                : accentColor
+            }
           />
           <Text
             style={[
               typography.statNumber,
               {
-                color: status === 'broken' ? colors.textMuted : textPrimary,
+                color:
+                  status === 'broken'
+                    ? colors.textMuted
+                    : status === 'frozen'
+                    ? '#55B9AD'
+                    : textPrimary,
                 marginLeft: 4,
               },
             ]}

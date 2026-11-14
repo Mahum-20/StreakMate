@@ -37,6 +37,7 @@ export default function StreakDetailScreen() {
   const [sendingNudge, setSendingNudge] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationMessage, setCelebrationMessage] = useState<string | undefined>();
 
   useEffect(() => {
     if (!id) {
@@ -97,8 +98,21 @@ export default function StreakDetailScreen() {
     if (!streak || !user || checkingIn) return;
     setCheckingIn(true);
     try {
-      await streakService.submitCheckIn(streak.id, user.uid);
+      const result = await streakService.submitCheckIn(streak.id, user.uid);
       setShowConfetti(true);
+      if (result.earnedFreeze) {
+        setCelebrationMessage(
+          `🎉 20-Day Milestone reached! You earned +1 Streak Freeze 🧊 (${result.freezesRemaining} total)!`
+        );
+      } else {
+        setCelebrationMessage(
+          isSolo
+            ? "You completed today's streak! Fantastic work maintaining consistency."
+            : result.allCompleted
+            ? "Both you and your friend have completed check-ins! Streak extended! 🔥"
+            : "Your check-in is saved! Ping your friend to lock in today's streak."
+        );
+      }
       setShowCelebration(true);
     } catch (err: any) {
       console.warn('Check-in error:', err);
@@ -428,13 +442,7 @@ export default function StreakDetailScreen() {
           visible={showCelebration}
           streakName={streak.name}
           streakCount={streak.currentStreak}
-          message={
-            isSolo
-              ? "You completed today's streak! Fantastic work maintaining consistency."
-              : streak.currentPeriodCheckIns && streak.currentPeriodCheckIns.length >= streak.participantUids.length - 1
-              ? "Both you and your friend have completed check-ins! Streak extended! 🔥"
-              : "Your check-in is saved! Ping your friend to lock in today's streak."
-          }
+          message={celebrationMessage}
           onClose={() => setShowCelebration(false)}
         />
       )}
