@@ -17,6 +17,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Avatar, Card, Badge, Button, EmptyState } from '@/components/common';
 import { streakService, StreakData } from '@/features/streaks/services/streakService';
 import { nudgeService } from '@/features/streaks/services/nudgeService';
+import { widgetService } from '@/features/widget/widgetService';
 import { ConfettiCelebration } from '@/components/motion/ConfettiCelebration';
 import { StreakCelebrationModal } from '@/components/modals/StreakCelebrationModal';
 import { LivingSkyBackground } from '@/components/motion/LivingSkyBackground';
@@ -142,6 +143,63 @@ export default function StreakDetailScreen() {
     }
   };
 
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteStreak = () => {
+    if (!streak || !user || deleting) return;
+
+    Alert.alert(
+      'Delete Streak',
+      `Are you sure you want to delete "${streak.name}"? This action cannot be undone and all streak history will be permanently deleted.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Streak',
+          style: 'destructive',
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await streakService.deleteStreak(streak.id);
+              // Cleanly sync remaining streaks to home screen widget
+              const remaining = await streakService.getUserStreaks(user.uid);
+              await widgetService.syncToNativeWidget(remaining, user.uid);
+              router.replace('/(tabs)');
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to delete streak.');
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleOpenOptions = () => {
+    if (!streak) return;
+
+    const pauseResumeText = streak.status === 'paused' ? 'Resume Streak' : 'Pause Streak';
+
+    Alert.alert(
+      'Streak Options',
+      'Manage streak settings',
+      [
+        {
+          text: pauseResumeText,
+          onPress: handleTogglePause,
+        },
+        {
+          text: 'Delete Streak',
+          style: 'destructive',
+          onPress: handleDeleteStreak,
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
   const handleTogglePause = () => {
     if (!streak) return;
 
@@ -242,7 +300,7 @@ export default function StreakDetailScreen() {
         </Text>
 
         <TouchableOpacity
-          onPress={handleTogglePause}
+          onPress={handleOpenOptions}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityRole="button"
           accessibilityLabel="Streak options"
@@ -428,6 +486,33 @@ export default function StreakDetailScreen() {
             )}
           </View>
         )}
+
+        {/* Delete Streak Section */}
+        <View style={styles.deleteSection}>
+          <TouchableOpacity
+            style={[
+              styles.deleteButton,
+              {
+                borderColor: skyConfig.isDarkContent ? 'rgba(239, 68, 68, 0.45)' : 'rgba(239, 68, 68, 0.3)',
+                backgroundColor: skyConfig.isDarkContent ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
+              },
+            ]}
+            onPress={handleDeleteStreak}
+            disabled={deleting}
+            activeOpacity={0.7}
+          >
+            {deleting ? (
+              <ActivityIndicator size="small" color="#EF4444" />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={18} color="#EF4444" style={{ marginRight: 8 }} />
+                <Text style={[typography.bodyMedium, { color: '#EF4444', fontWeight: '700' }]}>
+                  Delete Streak
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Confetti Celebration on Check-in */}
@@ -500,5 +585,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+  },
+  deleteSection: {
+    marginTop: 12,
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    borderWidth: 1,
+    width: '100%',
   },
 });

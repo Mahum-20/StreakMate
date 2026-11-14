@@ -6,6 +6,7 @@ import { useSky } from '@/core/environment/SkyContext';
 export interface CardProps {
   children: React.ReactNode;
   onPress?: () => void;
+  onLongPress?: () => void;
   style?: StyleProp<ViewStyle>;
   variant?: 'default' | 'elevated' | 'subtle';
   accessibilityLabel?: string;
@@ -14,6 +15,7 @@ export interface CardProps {
 export const Card: React.FC<CardProps> = ({
   children,
   onPress,
+  onLongPress,
   style,
   variant = 'default',
   accessibilityLabel,
@@ -57,11 +59,12 @@ export const Card: React.FC<CardProps> = ({
     return base;
   };
 
-  if (onPress) {
+  if (onPress || onLongPress) {
     return (
       <TouchableOpacity
         activeOpacity={0.7}
         onPress={onPress}
+        onLongPress={onLongPress}
         style={[getCardStyle(), style]}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}

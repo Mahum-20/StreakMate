@@ -19,6 +19,7 @@ export interface StreakCardProps {
   userCheckedIn: boolean;
   friendCheckedIn: boolean;
   onPress: () => void;
+  onLongPress?: () => void;
   onCheckIn?: () => void;
   style?: StyleProp<ViewStyle>;
 }
@@ -34,6 +35,7 @@ export const StreakCard: React.FC<StreakCardProps> = ({
   userCheckedIn,
   friendCheckedIn,
   onPress,
+  onLongPress,
   onCheckIn,
   style,
 }) => {
@@ -67,7 +69,7 @@ export const StreakCard: React.FC<StreakCardProps> = ({
   const badgeInfo = getStatusBadge();
 
   return (
-    <Card onPress={onPress} style={[styles.card, style]}>
+    <Card onPress={onPress} onLongPress={onLongPress} style={[styles.card, style]}>
       {/* Top row: Friend info or Solo indicator + Status badge */}
       <View style={styles.topRow}>
         <View style={styles.friendInfo}>

@@ -3,6 +3,7 @@ import {
   doc,
   addDoc,
   setDoc,
+  deleteDoc,
   getDoc,
   getDocs,
   onSnapshot,
@@ -400,5 +401,13 @@ export const streakService = {
   async resumeStreak(streakId: string): Promise<void> {
     const streakRef = doc(db, 'streaks', streakId);
     await setDoc(streakRef, { status: 'active', updatedAt: serverTimestamp() }, { merge: true });
+  },
+
+  /**
+   * Deletes a streak permanently from Firestore.
+   */
+  async deleteStreak(streakId: string): Promise<void> {
+    const streakRef = doc(db, 'streaks', streakId);
+    await deleteDoc(streakRef);
   },
 };

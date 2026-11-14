@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -162,6 +163,48 @@ export default function HomeScreen() {
     } catch (err) {
       console.warn('Check-in error:', err);
     }
+  };
+
+  const handleStreakLongPress = (streak: StreakData) => {
+    Alert.alert(
+      streak.name,
+      'Streak Options',
+      [
+        {
+          text: 'View Details',
+          onPress: () => router.push(`/streak/${streak.id}`),
+        },
+        {
+          text: 'Delete Streak',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete Streak',
+              `Are you sure you want to delete "${streak.name}"? This action cannot be undone.`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Streak',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await streakService.deleteStreak(streak.id);
+                      if (user?.uid) {
+                        const remaining = await streakService.getUserStreaks(user.uid);
+                        await widgetService.syncToNativeWidget(remaining, user.uid);
+                      }
+                    } catch (err: any) {
+                      Alert.alert('Error', err?.message || 'Failed to delete streak.');
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   // Helper to extract friend info and remaining hours
@@ -468,6 +511,7 @@ export default function HomeScreen() {
                       userCheckedIn={card.userCheckedIn}
                       friendCheckedIn={card.friendCheckedIn}
                       onPress={() => router.push(`/streak/${streak.id}`)}
+                      onLongPress={() => handleStreakLongPress(streak)}
                       onCheckIn={() => handleCheckIn(streak.id)}
                     />
                   );
@@ -503,6 +547,7 @@ export default function HomeScreen() {
                       userCheckedIn={card.userCheckedIn}
                       friendCheckedIn={card.friendCheckedIn}
                       onPress={() => router.push(`/streak/${streak.id}`)}
+                      onLongPress={() => handleStreakLongPress(streak)}
                       onCheckIn={() => handleCheckIn(streak.id)}
                     />
                   );
