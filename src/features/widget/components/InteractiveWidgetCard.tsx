@@ -151,7 +151,7 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
                 <Text style={styles.celebrationBadgeText}>100% COMPLETE</Text>
               </View>
               <Text style={[styles.celebrationTitle, { color: colors.textPrimary }]}>
-                All Done Today! ⭐
+                All Done Today!
               </Text>
               <Text style={[styles.celebrationSubtitle, { color: colors.textSecondary }]}>
                 {items.length === 1

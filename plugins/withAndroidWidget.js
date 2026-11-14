@@ -207,7 +207,7 @@ const withAndroidWidget = (config) => {
                 android:paddingRight="6dp"
                 android:paddingTop="2dp"
                 android:paddingBottom="2dp"
-                android:text="GREAT JOB! ⭐"
+                android:text="GREAT JOB!"
                 android:textColor="#FF9600"
                 android:textSize="9sp"
                 android:textStyle="bold" />
@@ -238,7 +238,7 @@ const withAndroidWidget = (config) => {
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="100% COMPLETE ⭐"
+                android:text="100% COMPLETE"
                 android:textColor="#FF9600"
                 android:textSize="10sp"
                 android:textStyle="bold"
@@ -697,7 +697,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.celebration_container, View.VISIBLE)
 
                     views.setImageViewResource(R.id.celebration_mascot, R.drawable.widget_mascot_complete)
-                    views.setTextViewText(R.id.celebration_title, "All Done Today! ⭐")
+                    views.setTextViewText(R.id.celebration_title, "All Done Today!")
                     views.setTextViewText(
                         R.id.celebration_subtitle,
                         if (streakCount == 1) "Habit completed! Streak protected 🌤️" else "Both habits completed! Momentum secured 🌤️"
