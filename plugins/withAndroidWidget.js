@@ -237,7 +237,7 @@ const withAndroidWidget = (config) => {
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
-                    android:gravity="baseline"
+                    android:gravity="bottom"
                     android:layout_marginTop="2dp">
 
                     <TextView
@@ -598,11 +598,9 @@ class StreakWidgetModule(reactContext: ReactApplicationContext) : ReactContextBa
       // 8. StreakWidgetPackage.kt (ReactPackage registering StreakWidgetModule)
       const packageKt = `package com.streakmate.app
 
-import android.view.View
 import com.facebook.react.ReactPackage
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
-import com.facebook.react.uimanager.ReactShadowNode
 import com.facebook.react.uimanager.ViewManager
 
 class StreakWidgetPackage : ReactPackage {
@@ -610,7 +608,7 @@ class StreakWidgetPackage : ReactPackage {
         return listOf(StreakWidgetModule(reactContext))
     }
 
-    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<View, ReactShadowNode<*>>> {
+    override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {
         return emptyList()
     }
 }
