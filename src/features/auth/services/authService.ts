@@ -102,10 +102,13 @@ export const authService = {
         updatedAt: serverTimestamp(),
       });
 
-      // 4. Register unique username lookup
+      // 4. Register unique username lookup (public profile search directory)
       const usernameRef = doc(db, 'usernames', cleanUsername);
       await setDoc(usernameRef, {
         uid: user.uid,
+        username: cleanUsername,
+        displayName: displayName.trim(),
+        avatarUrl: null,
         createdAt: serverTimestamp(),
       });
     } catch (firestoreErr) {

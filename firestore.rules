@@ -2,7 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -11,11 +13,18 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // 1. User profiles (readable by all authenticated users for search/profiles)
+    function isStreakParticipant(streakId) {
+      return isAuthenticated() && (
+        request.auth.uid in get(/databases/$(database)/documents/streaks/$(streakId)).data.participantUids
+      );
+    }
+
+    // ===============================================================
+    // 1. User Profiles (Private to Owner - Protects Email & Sensitive Data)
+    // ===============================================================
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isOwner(userId);
-      allow delete: if isOwner(userId);
+      // Strictly owner-only access to prevent unauthorized email and profile scraping
+      allow read, write: if isOwner(userId);
 
       match /deviceTokens/{tokenId} {
         allow read, write: if isOwner(userId);
@@ -26,76 +35,168 @@ service cloud.firestore {
       }
     }
 
-    // 2. Usernames lookup index (public for authenticated friend searching)
+    // ===============================================================
+    // 2. Usernames Index (Public Directory for Username Lookup)
+    // Contains only public display fields (uid, username, displayName, avatarUrl)
+    // ===============================================================
     match /usernames/{username} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      // Only authenticated owner can claim their unique username
+      allow create: if isAuthenticated()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username == username;
+      // Immutable once registered; cannot transfer usernames
+      allow update: if false;
       allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
     }
 
-    // 3. Friend requests
+    // ===============================================================
+    // 3. Friend Requests (Validated State Machine Transitions)
+    // ===============================================================
     match /friendRequests/{requestId} {
+      // Only sender and recipient can view their requests
       allow read: if isAuthenticated() && (
         resource.data.fromUid == request.auth.uid ||
         resource.data.toUid == request.auth.uid
       );
+
+      // Create: must be from current user to a distinct recipient with 'pending' status
       allow create: if isAuthenticated()
         && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toUid != request.auth.uid
         && request.resource.data.status == 'pending';
-      allow update: if isAuthenticated() && (
-        resource.data.toUid == request.auth.uid ||
-        resource.data.fromUid == request.auth.uid
-      );
+
+      // Update: strictly validated state machine
+      allow update: if isAuthenticated()
+        && resource.data.status == 'pending'
+        && (
+          // Recipient can accept or reject
+          (resource.data.toUid == request.auth.uid && request.resource.data.status in ['accepted', 'rejected']) ||
+          // Sender can cancel while pending
+          (resource.data.fromUid == request.auth.uid && request.resource.data.status == 'cancelled')
+        )
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.fromUid == resource.data.fromUid
+        && request.resource.data.toUid == resource.data.toUid;
+
+      // Delete: sender or recipient
       allow delete: if isAuthenticated() && (
         resource.data.fromUid == request.auth.uid ||
         resource.data.toUid == request.auth.uid
       );
     }
 
-    // 4. Friendships (mutual connection)
+    // ===============================================================
+    // 4. Friendships (Mutual Connections)
+    // ===============================================================
     match /friendships/{friendshipId} {
+      // Only the two mutual participants can read their friendship
       allow read: if isAuthenticated() && request.auth.uid in resource.data.participantUids;
-      allow create, update: if isAuthenticated() && request.auth.uid in request.resource.data.participantUids;
+
+      // Creation: must consist of exactly 2 distinct users, with the creator being one of them
+      allow create: if isAuthenticated()
+        && request.resource.data.participantUids.size() == 2
+        && request.auth.uid in request.resource.data.participantUids
+        && request.resource.data.participantUids[0] != request.resource.data.participantUids[1];
+
+      // Update: participants cannot be mutated; only activity/metadata can update
+      allow update: if isAuthenticated()
+        && request.auth.uid in resource.data.participantUids
+        && request.resource.data.participantUids == resource.data.participantUids
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participantData', 'activeStreakCount', 'updatedAt']);
+
       allow delete: if isAuthenticated() && request.auth.uid in resource.data.participantUids;
     }
 
-    // 5. Streaks (both Solo Streaks and Friend Streaks)
+    // ===============================================================
+    // 5. Streaks (Solo & Partner Streaks with Strict Field Constraints)
+    // ===============================================================
     match /streaks/{streakId} {
-      // Any participant can read their streak
+      // Only participating users can view the streak
       allow read: if isAuthenticated() && request.auth.uid in resource.data.participantUids;
-      
-      // Streak creation: creator must be authenticated and included in participantUids
-      // Supports Solo streaks (size == 1) and Friend streaks (size == 2)
+
+      // Streak creation: creator must be signed-in, included in participants, and start with 0 streak
       allow create: if isAuthenticated()
         && request.resource.data.creatorUid == request.auth.uid
         && request.auth.uid in request.resource.data.participantUids
-        && request.resource.data.participantUids.size() >= 1;
+        && request.resource.data.currentStreak == 0
+        && request.resource.data.longestStreak == 0
+        && request.resource.data.status == 'active'
+        && (
+          (request.resource.data.isSolo == true && request.resource.data.participantUids.size() == 1) ||
+          (request.resource.data.isSolo == false && request.resource.data.participantUids.size() == 2)
+        );
 
-      // Updating streak: participants can submit check-ins, creator can pause/resume or edit
-      allow update: if isAuthenticated() && (
-        request.auth.uid in resource.data.participantUids ||
-        request.auth.uid in request.resource.data.participantUids
+      // Updating streak: strictly constrain affected keys and prevent participant/creator tampering
+      allow update: if isAuthenticated()
+        && request.auth.uid in resource.data.participantUids
+        // Core immutable security invariants:
+        && request.resource.data.creatorUid == resource.data.creatorUid
+        && request.resource.data.participantUids == resource.data.participantUids
+        && request.resource.data.isSolo == resource.data.isSolo
+        // Constrain modified keys:
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'currentPeriodCheckIns', 'currentStreak', 'longestStreak',
+          'currentPeriodKey', 'currentPeriodStart', 'currentPeriodEnd',
+          'freezesRemaining', 'status', 'updatedAt',
+          'lastNudgeAt', 'lastNudgeBy', 'lastNudgePhrase', 'lastNudgeDismissed'
+        ])
+        // Streak counter cannot arbitrarily jump (cannot increase by more than 1 per update)
+        && request.resource.data.currentStreak >= 0
+        && request.resource.data.currentStreak <= resource.data.currentStreak + 1
+        // Valid status values only
+        && request.resource.data.status in ['active', 'paused', 'at_risk', 'frozen', 'broken'];
+
+      // Deletion: Only creator or participants can delete
+      allow delete: if isAuthenticated() && (
+        resource.data.creatorUid == request.auth.uid ||
+        request.auth.uid in resource.data.participantUids
       );
 
-      allow delete: if isAuthenticated() && resource.data.creatorUid == request.auth.uid;
-
-      // Check-in receipts subcollection
+      // Subcollection: Check-in receipts (Participant-only reads, immutable receipts)
       match /checkIns/{checkInId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-        allow update, delete: if false;
+        allow read: if isStreakParticipant(streakId);
+        allow create: if isStreakParticipant(streakId)
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.streakId == streakId;
+        allow update, delete: if false; // Receipts are strictly immutable
       }
 
-      // History subcollection
+      // Subcollection: History (Participant-only reads & writes)
       match /history/{periodKey} {
-        allow read: if isAuthenticated();
-        allow write: if isAuthenticated();
+        allow read: if isStreakParticipant(streakId);
+        allow create, update: if isStreakParticipant(streakId)
+          && request.resource.data.periodKey == periodKey;
+        allow delete: if isStreakParticipant(streakId);
       }
     }
 
-    // 6. Duolingo-style Friend Nudges
+    // ===============================================================
+    // 6. Social Nudges (Strict Sender & Recipient Security)
+    // ===============================================================
     match /nudges/{nudgeId} {
-      allow read, write: if isAuthenticated();
+      // Only sender or recipient can view the nudge
+      allow read: if isAuthenticated() && (
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid
+      );
+
+      // Create: sender must be authenticated user, recipient must be distinct
+      allow create: if isAuthenticated()
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.toUid != request.auth.uid
+        && request.resource.data.read == false;
+
+      // Update: only recipient can mark as read
+      allow update: if isAuthenticated()
+        && resource.data.toUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+
+      // Delete: sender or recipient
+      allow delete: if isAuthenticated() && (
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid
+      );
     }
   }
 }

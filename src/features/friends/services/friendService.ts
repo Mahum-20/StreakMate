@@ -50,18 +50,12 @@ export const friendService = {
       return null;
     }
 
-    const uid = usernameDoc.data().uid;
-    const userDoc = await getDoc(doc(db, 'users', uid));
-    if (!userDoc.exists()) {
-      return null;
-    }
-
-    const userData = userDoc.data();
+    const data = usernameDoc.data();
     return {
-      uid,
-      displayName: userData.displayName || 'StreakMate User',
-      username: userData.username || clean,
-      avatarUrl: userData.avatarUrl || null,
+      uid: data.uid,
+      displayName: data.displayName || 'StreakMate User',
+      username: data.username || clean,
+      avatarUrl: data.avatarUrl || null,
     };
   },
 
