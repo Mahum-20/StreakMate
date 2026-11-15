@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Dimensions,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +18,12 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Avatar, EmptyState, Card, Button } from '@/components/common';
 import { StreakCard, StatCard } from '@/components/cards';
 import { ConfettiCelebration } from '@/components/motion/ConfettiCelebration';
-import { StreakCelebrationModal } from '@/components/modals/StreakCelebrationModal';
+import {
+  StreakCelebrationModal,
+  StreakActionMenuModal,
+  DeleteStreakConfirmModal,
+  StreakDeletedModal,
+} from '@/components/modals';
 import { LivingSkyBackground } from '@/components/motion/LivingSkyBackground';
 import { streakService, StreakData } from '@/features/streaks/services/streakService';
 import { nudgeService, NudgeRecord } from '@/features/streaks/services/nudgeService';
@@ -47,6 +51,11 @@ export default function HomeScreen() {
     count: number;
     message?: string;
   }>({ visible: false, name: '', count: 0 });
+  const [selectedStreakForMenu, setSelectedStreakForMenu] = useState<StreakData | null>(null);
+  const [streakToDelete, setStreakToDelete] = useState<StreakData | null>(null);
+  const [showDeletedModal, setShowDeletedModal] = useState(false);
+  const [deletedStreakName, setDeletedStreakName] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!user?.uid) {
@@ -166,45 +175,40 @@ export default function HomeScreen() {
   };
 
   const handleStreakLongPress = (streak: StreakData) => {
-    Alert.alert(
-      streak.name,
-      'Streak Options',
-      [
-        {
-          text: 'View Details',
-          onPress: () => router.push(`/streak/${streak.id}`),
-        },
-        {
-          text: 'Delete Streak',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Delete Streak',
-              `Are you sure you want to delete "${streak.name}"? This action cannot be undone.`,
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Delete Streak',
-                  style: 'destructive',
-                  onPress: async () => {
-                    try {
-                      await streakService.deleteStreak(streak.id);
-                      if (user?.uid) {
-                        const remaining = await streakService.getUserStreaks(user.uid);
-                        await widgetService.syncToNativeWidget(remaining, user.uid);
-                      }
-                    } catch (err: any) {
-                      Alert.alert('Error', err?.message || 'Failed to delete streak.');
-                    }
-                  },
-                },
-              ]
-            );
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    setSelectedStreakForMenu(streak);
+  };
+
+  const handleTogglePause = async (streak: StreakData) => {
+    try {
+      if (streak.status === 'paused') {
+        await streakService.resumeStreak(streak.id);
+      } else {
+        await streakService.pauseStreak(streak.id);
+      }
+    } catch (err: any) {
+      console.warn('Error toggling pause:', err);
+    }
+  };
+
+  const handleExecuteDelete = async () => {
+    if (!streakToDelete || !user || deleting) return;
+    setDeleting(true);
+    try {
+      const name = streakToDelete.name;
+      const streakId = streakToDelete.id;
+      await streakService.deleteStreak(streakId);
+      if (user?.uid) {
+        const remaining = await streakService.getUserStreaks(user.uid);
+        await widgetService.syncToNativeWidget(remaining, user.uid);
+      }
+      setDeletedStreakName(name);
+      setStreakToDelete(null);
+      setShowDeletedModal(true);
+    } catch (err: any) {
+      console.warn('Error deleting streak:', err);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // Helper to extract friend info and remaining hours
@@ -600,6 +604,51 @@ export default function HomeScreen() {
         streakCount={celebrationData.count}
         message={celebrationData.message}
         onClose={() => setCelebrationData((prev) => ({ ...prev, visible: false }))}
+      />
+
+      {/* Themed Streak Action Menu Modal (Long Press) */}
+      {selectedStreakForMenu && (
+        <StreakActionMenuModal
+          visible={Boolean(selectedStreakForMenu)}
+          streakName={selectedStreakForMenu.name}
+          currentStreak={selectedStreakForMenu.currentStreak}
+          status={selectedStreakForMenu.status}
+          onClose={() => setSelectedStreakForMenu(null)}
+          onViewDetails={() => {
+            const id = selectedStreakForMenu.id;
+            setSelectedStreakForMenu(null);
+            router.push(`/streak/${id}`);
+          }}
+          onTogglePause={() => {
+            const target = selectedStreakForMenu;
+            setSelectedStreakForMenu(null);
+            handleTogglePause(target);
+          }}
+          onDeletePress={() => {
+            const target = selectedStreakForMenu;
+            setSelectedStreakForMenu(null);
+            setStreakToDelete(target);
+          }}
+        />
+      )}
+
+      {/* Themed Delete Confirmation Modal */}
+      {streakToDelete && (
+        <DeleteStreakConfirmModal
+          visible={Boolean(streakToDelete)}
+          streakName={streakToDelete.name}
+          currentStreak={streakToDelete.currentStreak}
+          loading={deleting}
+          onConfirm={handleExecuteDelete}
+          onCancel={() => setStreakToDelete(null)}
+        />
+      )}
+
+      {/* Themed Deletion Completion Pop-up Modal */}
+      <StreakDeletedModal
+        visible={showDeletedModal}
+        streakName={deletedStreakName || 'Habit'}
+        onClose={() => setShowDeletedModal(false)}
       />
     </LivingSkyBackground>
   );

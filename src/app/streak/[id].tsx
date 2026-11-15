@@ -19,7 +19,12 @@ import { streakService, StreakData } from '@/features/streaks/services/streakSer
 import { nudgeService } from '@/features/streaks/services/nudgeService';
 import { widgetService } from '@/features/widget/widgetService';
 import { ConfettiCelebration } from '@/components/motion/ConfettiCelebration';
-import { StreakCelebrationModal } from '@/components/modals/StreakCelebrationModal';
+import {
+  StreakCelebrationModal,
+  StreakActionMenuModal,
+  DeleteStreakConfirmModal,
+  StreakDeletedModal,
+} from '@/components/modals';
 import { LivingSkyBackground } from '@/components/motion/LivingSkyBackground';
 import { calculatePeriodKey, getEndOfDay } from '@/core/utils/streakLogic';
 
@@ -39,6 +44,11 @@ export default function StreakDetailScreen() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
   const [celebrationMessage, setCelebrationMessage] = useState<string | undefined>();
+  const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showDeletedModal, setShowDeletedModal] = useState(false);
+  const [deletedStreakName, setDeletedStreakName] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -143,103 +153,47 @@ export default function StreakDetailScreen() {
     }
   };
 
-  const [deleting, setDeleting] = useState(false);
-
-  const handleDeleteStreak = () => {
-    if (!streak || !user || deleting) return;
-
-    Alert.alert(
-      'Delete Streak',
-      `Are you sure you want to delete "${streak.name}"? This action cannot be undone and all streak history will be permanently deleted.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Streak',
-          style: 'destructive',
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              await streakService.deleteStreak(streak.id);
-              // Cleanly sync remaining streaks to home screen widget
-              const remaining = await streakService.getUserStreaks(user.uid);
-              await widgetService.syncToNativeWidget(remaining, user.uid);
-              router.replace('/(tabs)');
-            } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to delete streak.');
-              setDeleting(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const handleOpenOptions = () => {
     if (!streak) return;
-
-    const pauseResumeText = streak.status === 'paused' ? 'Resume Streak' : 'Pause Streak';
-
-    Alert.alert(
-      'Streak Options',
-      'Manage streak settings',
-      [
-        {
-          text: pauseResumeText,
-          onPress: handleTogglePause,
-        },
-        {
-          text: 'Delete Streak',
-          style: 'destructive',
-          onPress: handleDeleteStreak,
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ]
-    );
+    setShowActionMenu(true);
   };
 
-  const handleTogglePause = () => {
+  const handleTogglePause = async () => {
     if (!streak) return;
-
-    if (streak.status === 'paused') {
-      Alert.alert(
-        'Resume Streak',
-        'Would you like to resume this streak and reactivate daily accountability?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Resume',
-            onPress: async () => {
-              try {
-                await streakService.resumeStreak(streak.id);
-              } catch (err: any) {
-                Alert.alert('Error', err?.message || 'Failed to resume streak.');
-              }
-            },
-          },
-        ]
-      );
-    } else {
-      Alert.alert(
-        'Pause Streak',
-        'Pausing freezes your streak counter while you take a planned break.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Pause',
-            onPress: async () => {
-              try {
-                await streakService.pauseStreak(streak.id);
-              } catch (err: any) {
-                Alert.alert('Error', err?.message || 'Failed to pause streak.');
-              }
-            },
-          },
-        ]
-      );
+    try {
+      if (streak.status === 'paused') {
+        await streakService.resumeStreak(streak.id);
+      } else {
+        await streakService.pauseStreak(streak.id);
+      }
+    } catch (err: any) {
+      console.warn('Error toggling streak pause:', err);
     }
+  };
+
+  const handleExecuteDelete = async () => {
+    if (!streak || !user || deleting) return;
+    setDeleting(true);
+    try {
+      const name = streak.name;
+      const streakId = streak.id;
+      await streakService.deleteStreak(streakId);
+      // Cleanly sync remaining streaks to home screen widget
+      const remaining = await streakService.getUserStreaks(user.uid);
+      await widgetService.syncToNativeWidget(remaining, user.uid);
+      setDeletedStreakName(name);
+      setShowDeleteConfirm(false);
+      setShowDeletedModal(true);
+    } catch (err: any) {
+      console.warn('Error deleting streak:', err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleCloseDeletedModal = () => {
+    setShowDeletedModal(false);
+    router.replace('/(tabs)');
   };
 
   if (loading) {
@@ -497,7 +451,7 @@ export default function StreakDetailScreen() {
                 backgroundColor: skyConfig.isDarkContent ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)',
               },
             ]}
-            onPress={handleDeleteStreak}
+            onPress={() => setShowDeleteConfirm(true)}
             disabled={deleting}
             activeOpacity={0.7}
           >
@@ -531,6 +485,38 @@ export default function StreakDetailScreen() {
           onClose={() => setShowCelebration(false)}
         />
       )}
+
+      {/* Themed Streak Action Menu Modal */}
+      {streak && (
+        <StreakActionMenuModal
+          visible={showActionMenu}
+          streakName={streak.name}
+          currentStreak={streak.currentStreak}
+          status={streak.status}
+          onClose={() => setShowActionMenu(false)}
+          onTogglePause={handleTogglePause}
+          onDeletePress={() => setShowDeleteConfirm(true)}
+        />
+      )}
+
+      {/* Themed Delete Confirmation Modal */}
+      {streak && (
+        <DeleteStreakConfirmModal
+          visible={showDeleteConfirm}
+          streakName={streak.name}
+          currentStreak={streak.currentStreak}
+          loading={deleting}
+          onConfirm={handleExecuteDelete}
+          onCancel={() => setShowDeleteConfirm(false)}
+        />
+      )}
+
+      {/* Themed Deletion Completion Pop-up Modal */}
+      <StreakDeletedModal
+        visible={showDeletedModal}
+        streakName={deletedStreakName || streak?.name || 'Habit'}
+        onClose={handleCloseDeletedModal}
+      />
     </LivingSkyBackground>
   );
 }
