@@ -1,19 +1,45 @@
-# StreakMate — Production-Grade Android Application
+# 🌤️ StreakMate — Social Habit & Streak Tracker
 
-StreakMate is an Android-first accountability and habit continuity platform. It connects close peers to maintain customized, independent daily streaks with server-authoritative verification and multi-tiered proactive notifications.
+> **Maintain momentum together.** StreakMate is a modern, gamified habit tracker built with **React Native** and **Expo**. Designed with an atmospheric **Living Sky day/night engine** and paired social accountability, StreakMate turns daily consistency into an engaging, shared journey.
+
+---
+
+## ✨ Key Features
+
+- **🌤️ Living Sky Adaptive Theme**: The entire UI changes dynamically based on the local time of day (Sunrise, Midday, Golden Hour, Twilight, and Night) with glassmorphic cards and soft pastel accents.
+- **🤝 Paired & Solo Habits**: Track habits independently or pair with an accountability partner where both participants must check in to extend the streak.
+- **📱 Duolingo-Style 4x2 Android Widget**:
+  - Live on your home screen with **Nimbus the 3D Cloud Buddy** and contextual speech bubbles.
+  - Multi-habit support (1 Hero habit or 2 Duo habits).
+  - One-tap check-in buttons directly from your home screen without opening the app.
+- **🧊 Streak Freeze & Milestone System**:
+  - Automatic streak freeze protection (preserves your streak if a day is missed).
+  - Earn +1 Streak Freeze for every 20 continuous days of consistency.
+- **🔔 Social Nudges**: Ping accountability partners with real-time in-app nudges when deadlines approach.
+- **🎨 Themed Modals & UI**: Custom-built action menus, delete confirmations, and celebration modals matching the app's sky theme.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Framework**: [React Native](https://reactnative.dev/) (v0.88) with [Expo SDK 58](https://expo.dev/)
+- **Routing**: [Expo Router](https://docs.expo.dev/router/introduction/) (File-based navigation)
+- **Backend & Database**: [Firebase](https://firebase.google.com/) (Auth, Cloud Firestore & Atomic Transactions)
+- **State Management**: [Zustand](https://github.com/pmndrs/zustand) & [TanStack Query](https://tanstack.com/query)
+- **Native Android Widget**: Custom Kotlin `AppWidgetProvider` & Expo Config Plugin (`withAndroidWidget.js`)
+- **Language & Testing**: TypeScript & Jest (28 lifecycle unit tests)
 
 ---
 
 ## 1. Quick Start & Development Workflow
 
 ### Prerequisites
-* **Node.js**: v22 LTS
-* **npm**: v11+
-* **No Android Studio Required**: Run directly on your physical Android phone using **Expo Go** or build a standalone `.apk` using **EAS Build**.
+* **Node.js**: v20+ LTS
+* **npm**: v10+
 
-### 1.1 Local Development (Instant Device Preview)
+### 1.1 Local Development
 ```bash
-# 1. Install dependencies (if not already installed)
+# 1. Install dependencies
 npm install
 
 # 2. Start Expo development server
@@ -27,22 +53,19 @@ npx expo start
 ## 2. Cloud Builds (EAS Build)
 
 ### 2.1 Generate Installable Android APK (Preview Build)
-Build an optimized standalone `.apk` directly downloadable onto any physical Android device without needing Android Studio installed locally:
+Build an optimized standalone `.apk` directly downloadable onto any physical Android device:
 ```bash
 npx eas build --platform android --profile preview
 ```
+Or run the provided Windows helper script:
+```powershell
+.\make-apk.bat
+```
 
 ### 2.2 Generate Production Android App Bundle (AAB)
-Build a signed, release-optimized `.aab` ready for upload to the Google Play Console:
 ```bash
 npx eas build --platform android --profile production
 ```
-
-### 2.3 Local Production Bundle Export
-```bash
-npx expo export --platform android
-```
-* Measured compiled Hermes bytecode footprint: **4.3 MB** (hitting our 4–5 MB lightweight application target).
 
 ---
 
@@ -54,13 +77,14 @@ StreakMate enforces strict code quality and mathematical correctness:
 # Run TypeScript strict type-check (0 errors)
 npx tsc --noEmit
 
-# Run Unit Test suite (14/14 tests passing)
-npx jest
+# Run Unit Test suite (28/28 tests passing)
+npm test
 ```
 
 ### Test Coverage Highlights
 * **Authoritative Streak Calculations**: Increments only when all participants complete check-in.
 * **Duplicate Check-In Prevention**: Rejects duplicate receipts within the same period cycle.
+* **Streak Freeze Lifecycle**: Automatically deducts freezes on rollover and awards milestone freezes (+1 every 20 days).
 * **Smart Expiration Thresholds**:
   * Remaining > 3h $\rightarrow$ Active
   * Remaining $\le$ 3h $\rightarrow$ Lead Reminder
@@ -74,42 +98,34 @@ npx jest
 
 ```text
 Streaks App/
+├── assets/                            # Mascot illustrations & icons
+│   └── mascot/                        # Nimbus 3D Cloud Buddy emotions
+├── plugins/
+│   └── withAndroidWidget.js           # Expo config plugin for native Android 4x2 AppWidget
 ├── src/
 │   ├── app/                           # File-based Typed Routing (Expo Router)
 │   │   ├── _layout.tsx                # App Root (Auth Gate, Theme, React Query)
 │   │   ├── index.tsx                  # Splash / Gatekeeper redirection
-│   │   ├── (auth)/
-│   │   │   ├── login.tsx              # Email / Password Sign In
-│   │   │   ├── register.tsx           # Account Creation & Username reservation
-│   │   │   └── forgot-password.tsx    # Password recovery dispatch
-│   │   ├── (tabs)/
-│   │   │   ├── _layout.tsx            # Bottom Tab Bar (Deep Midnight & Warm Coral)
-│   │   │   ├── index.tsx              # Home Dashboard (Active, At-Risk, Stats)
-│   │   │   ├── friends.tsx            # Friends Directory & Request Management
-│   │   │   └── settings.tsx           # Dark/Light Theme, Reminders, Account
-│   │   ├── streak/
-│   │   │   ├── [id].tsx               # Detailed Streak View & 7-Day History
-│   │   │   └── create.tsx             # Modal to start new custom streak
-│   │   └── friends/
-│   │       └── add.tsx                # Search by @username & send invite
+│   │   ├── widget.tsx                 # Interactive Widget Settings & Preview
+│   │   ├── (auth)/                    # Login, Register, Forgot Password
+│   │   ├── (tabs)/                    # Home Dashboard, Friends, Settings
+│   │   ├── streak/                    # Detailed Streak View & Create
+│   │   └── checkin/                   # Deep link handler for widget check-ins
 │   ├── components/
 │   │   ├── common/                    # Button, Input, Card, Badge, Avatar, Header, EmptyState
-│   │   └── cards/                     # StreakCard, FriendCard, StatCard
+│   │   ├── cards/                     # StreakCard, FriendCard, StatCard
+│   │   ├── modals/                    # StreakCelebration, StreakActionMenu, DeleteConfirm, StreakDeleted
+│   │   └── motion/                    # LivingSkyBackground, ConfettiCelebration
 │   ├── core/
 │   │   ├── config/                    # Firebase Modular Client (Auth with AsyncStorage)
+│   │   ├── environment/               # Living Sky Context & TimeOfDayEngine
 │   │   ├── theme/                     # Colors, Typography, Spacing, ThemeContext
 │   │   └── utils/                     # streakLogic.ts & calculations engine
-│   └── store/
-│       └── useAuthStore.ts            # Reactive authentication session store
-├── functions/                         # Firebase Cloud Functions (TypeScript Backend)
-│   ├── src/
-│   │   ├── streaks/checkIn.ts         # submitCheckIn atomic transaction
-│   │   ├── scheduled/streakMonitor.ts # Cron monitor (every 15m) for expiration
-│   │   ├── notifications/fcmDispatcher.ts # FCM multicast token dispatcher
-│   │   └── index.ts
+│   └── features/
+│       ├── streaks/                   # streakService, nudgeService
+│       └── widget/                    # widgetService, mascotAssets, InteractiveWidgetCard
 ├── firestore.rules                    # Production RBAC & Participant Security Rules
-├── firestore.indexes.json             # Composite query indexes
-├── firebase.json                      # Firebase configuration & emulator suite
+├── firebase.json                      # Firebase configuration
 ├── eas.json                           # EAS Build profiles (preview APK & production AAB)
 ├── app.json                           # Expo application manifest & Android package
 └── package.json
@@ -121,18 +137,5 @@ Streaks App/
 
 * **Zero Arbitrary Streak Updates**: Clients cannot manually modify `currentStreak`, `longestStreak`, or `currentPeriodEnd`.
 * **Participant Ownership**: Security rules enforce that users can only submit check-in receipts containing their authenticated UID (`request.auth.uid == userId`).
-* **Immutability**: Check-in receipts and history records cannot be modified or deleted once written.
+* **Atomic Transactions**: All rollover, freeze deduction, milestone reward, and check-in logic runs inside Firestore atomic transactions to prevent race conditions.
 * **Default-Deny Access**: All unmatched paths reject reads and writes (`allow read, write: if false;`).
-
----
-
-## 6. Firebase Backend & Emulators
-
-To run and test Cloud Functions and Security Rules locally using the Firebase Emulator Suite:
-```bash
-# Build Cloud Functions TypeScript
-npm --prefix functions run build
-
-# Start Emulators (Firestore, Auth, Functions)
-firebase emulators:start
-```
