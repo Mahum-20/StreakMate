@@ -12,6 +12,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/core/config/firebase';
+import { widgetService } from '@/features/widget/widgetService';
 
 let GoogleSignin: any = null;
 let statusCodes: any = null;
@@ -237,6 +238,11 @@ export const authService = {
   },
 
   async logout() {
+    try {
+      await widgetService.clearWidgetOnLogout();
+    } catch (widgetErr) {
+      console.warn('Widget cleanup on logout notice:', widgetErr);
+    }
     await signOut(auth);
   },
 };

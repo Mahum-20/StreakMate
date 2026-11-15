@@ -218,14 +218,25 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
                   </Text>
                 </View>
 
-                {/* Status caption */}
+                {/* Status caption & Social accountability */}
                 <Text
                   style={[
                     styles.singleStatusCaption,
                     { color: singleIsDone ? colors.mint : colors.textSecondary },
                   ]}
+                  numberOfLines={1}
                 >
-                  {singleIsDone ? 'Completed today ✓' : 'Tap button to check in'}
+                  {singleItem.isSolo
+                    ? singleIsDone
+                      ? 'Completed today ✓'
+                      : `${singleItem.hoursRemaining}h remaining today`
+                    : singleIsDone && singleItem.friendCheckedIn
+                    ? 'Both completed today! 🔥'
+                    : singleIsDone && !singleItem.friendCheckedIn
+                    ? `Waiting for ${singleItem.friendName} ⏳`
+                    : !singleIsDone && singleItem.friendCheckedIn
+                    ? `${singleItem.friendName} checked in! Your turn ⚡`
+                    : `Both pending • ${singleItem.hoursRemaining}h left`}
                 </Text>
               </TouchableOpacity>
 
@@ -305,8 +316,18 @@ export const InteractiveWidgetCard: React.FC<InteractiveWidgetCardProps> = ({
                             {item.currentStreak === 1 ? ' day' : ' days'}
                           </Text>
                         </Text>
-                        <Text style={[styles.twoStreakStatus, { color: isDone ? colors.mint : colors.textSecondary }]}>
-                          {isDone ? ' • Done ✓' : ` • ${item.hoursRemaining}h left`}
+                        <Text style={[styles.twoStreakStatus, { color: isDone ? colors.mint : colors.textSecondary }]} numberOfLines={1}>
+                          {item.isSolo
+                            ? isDone
+                              ? ' • Done ✓'
+                              : ` • ${item.hoursRemaining}h left`
+                            : isDone && item.friendCheckedIn
+                            ? ' • Both done ✓'
+                            : isDone && !item.friendCheckedIn
+                            ? ` • Waiting for ${item.friendName}`
+                            : !isDone && item.friendCheckedIn
+                            ? ` • ${item.friendName} done!`
+                            : ' • Both pending'}
                         </Text>
                       </View>
                     </TouchableOpacity>

@@ -187,7 +187,11 @@ export const widgetService = {
             name: snap.name,
             currentStreak: snap.currentStreak,
             userCheckedIn: snap.userCheckedIn,
+            friendCheckedIn: snap.friendCheckedIn,
+            friendName: snap.friendName,
             hoursRemaining: snap.hoursRemaining,
+            status: snap.status,
+            isSolo: snap.isSolo,
           };
         }),
       };
@@ -195,6 +199,61 @@ export const widgetService = {
       StreakWidgetModule.updateWidgetData(JSON.stringify(payload));
     } catch (err) {
       console.warn('Failed to sync widget data to native Android:', err);
+    }
+  },
+
+  /**
+   * Processes any pending offline or instant home screen check-ins recorded
+   * by the native widget BroadcastReceiver and synchronizes them to Firestore.
+   */
+  async processPendingWidgetCheckIns(userId: string): Promise<void> {
+    if (Platform.OS !== 'android' || !StreakWidgetModule?.getPendingCheckIns) {
+      return;
+    }
+
+    try {
+      const raw = await StreakWidgetModule.getPendingCheckIns();
+      if (!raw || raw === '[]') return;
+
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) {
+        for (const item of list) {
+          if (item?.streakId) {
+            try {
+              await streakService.submitCheckIn(item.streakId, userId);
+            } catch (checkErr) {
+              console.warn('Pending widget check-in processing notice:', checkErr);
+            }
+          }
+        }
+
+        if (StreakWidgetModule.clearPendingCheckIns) {
+          await StreakWidgetModule.clearPendingCheckIns();
+        }
+
+        const updatedStreaks = await streakService.getUserStreaks(userId);
+        await this.syncToNativeWidget(updatedStreaks, userId);
+      }
+    } catch (err) {
+      console.warn('Failed to process pending widget check-ins:', err);
+    }
+  },
+
+  /**
+   * Safely clears all pinned streaks and native Android widget data
+   * when the user signs out, preventing private habit exposure.
+   */
+  async clearWidgetOnLogout(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(WIDGET_PINNED_STREAK_KEY);
+      await AsyncStorage.removeItem(WIDGET_PINNED_STREAKS_KEY);
+      await AsyncStorage.removeItem('@streakmate/widget_capacity_mode');
+
+      if (Platform.OS === 'android' && StreakWidgetModule?.clearWidgetData) {
+        await StreakWidgetModule.clearWidgetData();
+      }
+    } catch (err) {
+      console.warn('Failed to clear widget data on logout:', err);
     }
   },
 };

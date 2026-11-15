@@ -64,6 +64,9 @@ export default function HomeScreen() {
     }
 
     setLoading(true);
+    // Process any native widget check-ins recorded while app was closed/backgrounded
+    widgetService.processPendingWidgetCheckIns(user.uid);
+
     const unsubscribeStreaks = streakService.subscribeToUserStreaks(
       user.uid,
       (liveStreaks) => {
@@ -135,12 +138,25 @@ export default function HomeScreen() {
     return Array.from(map.values());
   }, [incomingNudges, streaks, user]);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => {
+  const onRefresh = useCallback(async () => {
+    if (!user?.uid) {
       setRefreshing(false);
-    }, 600);
-  }, []);
+      return;
+    }
+    setRefreshing(true);
+    try {
+      await widgetService.processPendingWidgetCheckIns(user.uid);
+      const freshStreaks = await streakService.getUserStreaks(user.uid);
+      if (freshStreaks.length > 0) {
+        setStreaks(freshStreaks);
+        await widgetService.syncToNativeWidget(freshStreaks, user.uid);
+      }
+    } catch (refreshErr) {
+      console.warn('Pull-to-refresh error:', refreshErr);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [user?.uid]);
 
   const handleCheckIn = async (streakId: string) => {
     if (!user?.uid) return;
