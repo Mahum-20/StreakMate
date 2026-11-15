@@ -95,7 +95,9 @@ export const widgetService = {
     const friendCheckedIn = Boolean(friendUid && activeCheckIns.includes(friendUid));
 
     const now = Date.now();
-    const endOfDayMillis = getEndOfDay(new Date()).getTime();
+    const endOfDayMillis = streak.currentPeriodEnd
+      ? (streak.currentPeriodEnd.toDate ? streak.currentPeriodEnd.toDate().getTime() : getEndOfDay(new Date(), tz).getTime())
+      : getEndOfDay(new Date(), tz).getTime();
     const hoursRemaining = Math.max(0, Math.floor((endOfDayMillis - now) / (1000 * 60 * 60)));
 
     return {

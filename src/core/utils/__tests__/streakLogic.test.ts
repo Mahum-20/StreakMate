@@ -115,12 +115,28 @@ describe('Streak Calculation & Lifecycle Logic Engine', () => {
       expect(keyUTC).toBe('2026-11-06');
     });
 
-    it('correctly calculates end of day at 23:59:59.999', () => {
-      const testDate = new Date('2026-11-08T22:00:00');
-      const end = getEndOfDay(testDate);
-      expect(end.getHours()).toBe(23);
-      expect(end.getMinutes()).toBe(59);
-      expect(end.getSeconds()).toBe(59);
+    it('correctly calculates end of day at 23:59:59.999 in UTC', () => {
+      const testDate = new Date('2026-11-15T12:00:00Z');
+      const end = getEndOfDay(testDate, 'UTC');
+      expect(end.toISOString()).toBe('2026-11-15T23:59:59.999Z');
+    });
+
+    it('correctly calculates end of day in America/New_York (UTC-5)', () => {
+      const testDate = new Date('2026-11-15T12:00:00Z');
+      const end = getEndOfDay(testDate, 'America/New_York');
+      expect(end.toISOString()).toBe('2026-11-16T04:59:59.999Z');
+    });
+
+    it('correctly calculates end of day in Asia/Tokyo (UTC+9)', () => {
+      const testDate = new Date('2026-11-15T12:00:00Z');
+      const end = getEndOfDay(testDate, 'Asia/Tokyo');
+      expect(end.toISOString()).toBe('2026-11-15T14:59:59.999Z');
+    });
+
+    it('correctly calculates end of day in Europe/London (UTC+0 in winter)', () => {
+      const testDate = new Date('2026-11-15T12:00:00Z');
+      const end = getEndOfDay(testDate, 'Europe/London');
+      expect(end.toISOString()).toBe('2026-11-15T23:59:59.999Z');
     });
 
     it('identifies when a period key is from yesterday vs today', () => {

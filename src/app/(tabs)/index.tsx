@@ -227,9 +227,11 @@ export default function HomeScreen() {
     const userCheckedIn = user?.uid ? activeCheckIns.includes(user.uid) : false;
     const friendCheckedIn = isSolo ? true : (friendUid ? activeCheckIns.includes(friendUid) : false);
 
-    // End of day is always 23:59:59 of today in the user's timezone!
+    // End of day is always 23:59:59 of today in the streak's timezone
     const now = Date.now();
-    const endOfDayMillis = getEndOfDay(new Date()).getTime();
+    const endOfDayMillis = streak.currentPeriodEnd
+      ? streak.currentPeriodEnd.toDate().getTime()
+      : getEndOfDay(new Date(), streak.timezone).getTime();
     const hoursRemaining = Math.max(0, Math.floor((endOfDayMillis - now) / (1000 * 60 * 60)));
 
     return {

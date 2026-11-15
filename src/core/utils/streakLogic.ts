@@ -27,12 +27,57 @@ export function calculatePeriodKey(date: Date, timezone: string = 'UTC'): string
 }
 
 /**
- * Returns the precise end of the calendar day (23:59:59.999) for the given date.
+ * Helper to compute timezone offset in milliseconds for a specific UTC date.
+ * Deterministic and cross-platform compatible across modern JS engines including Hermes.
  */
-export function getEndOfDay(date: Date = new Date()): Date {
-  const end = new Date(date);
-  end.setHours(23, 59, 59, 999);
-  return end;
+function getTimezoneOffsetMs(date: Date, timeZone: string): number {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hourCycle: 'h23',
+  });
+  const parts = dtf.formatToParts(date);
+  const map: Record<string, string> = {};
+  for (const p of parts) map[p.type] = p.value;
+  const localAsUtc = Date.UTC(
+    parseInt(map.year, 10),
+    parseInt(map.month, 10) - 1,
+    parseInt(map.day, 10),
+    parseInt(map.hour, 10),
+    parseInt(map.minute, 10),
+    parseInt(map.second, 10)
+  );
+  const dateUtcSeconds = Math.floor(date.getTime() / 1000) * 1000;
+  return localAsUtc - dateUtcSeconds;
+}
+
+/**
+ * Returns the precise end of the calendar day (23:59:59.999) in the specified IANA timezone.
+ * Resolves the true calendar day boundary according to the streak's timezone rather than the device's clock.
+ * Defaults to UTC if timezone is not provided or invalid.
+ */
+export function getEndOfDay(date: Date = new Date(), timezone: string = 'UTC'): Date {
+  try {
+    const periodKey = calculatePeriodKey(date, timezone);
+    const [y, m, d] = periodKey.split('-').map(Number);
+    // Local target timestamp in UTC representation
+    const targetLocalUtc = Date.UTC(y, m - 1, d, 23, 59, 59, 999);
+    // Find offset at that approximate target
+    const approxDate = new Date(targetLocalUtc);
+    const offset = getTimezoneOffsetMs(approxDate, timezone);
+    const exactUtc = targetLocalUtc - offset;
+    const finalOffset = getTimezoneOffsetMs(new Date(exactUtc), timezone);
+    return new Date(targetLocalUtc - finalOffset);
+  } catch {
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    return end;
+  }
 }
 
 /**

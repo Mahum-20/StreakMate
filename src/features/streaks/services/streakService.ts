@@ -132,7 +132,7 @@ export const streakService = {
     const periodKey = calculatePeriodKey(now, tz);
 
     // Standard period: ends at midnight (23:59:59) in the creator's timezone
-    const periodEnd = getEndOfDay(now);
+    const periodEnd = getEndOfDay(now, tz);
 
     const isSolo = Boolean(input.isSolo || !input.friendUid);
     const participantUids = isSolo || !input.friendUid
@@ -332,7 +332,7 @@ export const streakService = {
       const allCompleted = participants.length > 0 && participants.every((p) => newCheckIns.includes(p));
       const newStreakCount = allCompleted ? baseStreak + 1 : baseStreak;
       const newLongest = Math.max(data.longestStreak || 0, newStreakCount);
-      const periodEnd = getEndOfDay(now);
+      const periodEnd = getEndOfDay(now, tz);
 
       // 4. Milestone Check: Award +1 streak freeze every 20 continuous days!
       let finalFreezes = currentFreezes;
@@ -405,9 +405,43 @@ export const streakService = {
 
   /**
    * Deletes a streak permanently from Firestore.
+   * Performs recursive cascading deletion of subcollections ('checkIns', 'history')
+   * and related nudges to ensure clean referential integrity and avoid orphaned documents.
    */
   async deleteStreak(streakId: string): Promise<void> {
     const streakRef = doc(db, 'streaks', streakId);
+
+    try {
+      // 1. Delete all check-in receipts in subcollection
+      const checkInsRef = collection(db, 'streaks', streakId, 'checkIns');
+      const checkInsSnap = await getDocs(checkInsRef);
+      const deletePromises: Promise<void>[] = [];
+
+      checkInsSnap.forEach((docSnap) => {
+        deletePromises.push(deleteDoc(docSnap.ref));
+      });
+
+      // 2. Delete all history logs in subcollection
+      const historyRef = collection(db, 'streaks', streakId, 'history');
+      const historySnap = await getDocs(historyRef);
+      historySnap.forEach((docSnap) => {
+        deletePromises.push(deleteDoc(docSnap.ref));
+      });
+
+      // 3. Delete any social nudges referencing this streak
+      const nudgesRef = collection(db, 'nudges');
+      const nudgesQuery = query(nudgesRef, where('streakId', '==', streakId));
+      const nudgesSnap = await getDocs(nudgesQuery);
+      nudgesSnap.forEach((docSnap) => {
+        deletePromises.push(deleteDoc(docSnap.ref));
+      });
+
+      await Promise.all(deletePromises);
+    } catch (cleanupErr) {
+      console.warn('Cascading subcollection deletion notice:', cleanupErr);
+    }
+
+    // 4. Finally delete the parent streak document
     await deleteDoc(streakRef);
   },
 };

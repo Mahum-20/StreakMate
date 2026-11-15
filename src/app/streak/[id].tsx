@@ -98,7 +98,9 @@ export default function StreakDetailScreen() {
 
   // Compute hours remaining until midnight in streak timezone
   const now = Date.now();
-  const endOfDayMillis = getEndOfDay(new Date()).getTime();
+  const endOfDayMillis = streak?.currentPeriodEnd
+    ? streak.currentPeriodEnd.toDate().getTime()
+    : getEndOfDay(new Date(), tz).getTime();
   const hoursRemaining = Math.max(0, Math.floor((endOfDayMillis - now) / (1000 * 60 * 60)));
 
   const createdAtFormatted = streak?.createdAt

@@ -139,7 +139,8 @@ service cloud.firestore {
           'currentPeriodCheckIns', 'currentStreak', 'longestStreak',
           'currentPeriodKey', 'currentPeriodStart', 'currentPeriodEnd',
           'freezesRemaining', 'status', 'updatedAt',
-          'lastNudgeAt', 'lastNudgeBy', 'lastNudgePhrase', 'lastNudgeDismissed'
+          'lastNudgeAt', 'lastNudgeBy', 'lastNudgePhrase', 'lastNudgeDismissed',
+          'lastLeadReminderPeriodKey', 'lastUrgentWarningPeriodKey'
         ])
         // Streak counter cannot arbitrarily jump (cannot increase by more than 1 per update)
         && request.resource.data.currentStreak >= 0
@@ -153,13 +154,14 @@ service cloud.firestore {
         request.auth.uid in resource.data.participantUids
       );
 
-      // Subcollection: Check-in receipts (Participant-only reads, immutable receipts)
+      // Subcollection: Check-in receipts (Participant-only reads, immutable receipts, cascade deletion allowed)
       match /checkIns/{checkInId} {
         allow read: if isStreakParticipant(streakId);
         allow create: if isStreakParticipant(streakId)
           && request.resource.data.userId == request.auth.uid
           && request.resource.data.streakId == streakId;
-        allow update, delete: if false; // Receipts are strictly immutable
+        allow update: if false; // Receipts are strictly immutable
+        allow delete: if isStreakParticipant(streakId); // Permitted for cascading streak cleanup
       }
 
       // Subcollection: History (Participant-only reads & writes)

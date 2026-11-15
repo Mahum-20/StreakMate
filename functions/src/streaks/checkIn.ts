@@ -1,6 +1,12 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { sendStreakNotification } from '../notifications/fcmDispatcher';
+import {
+  calculatePeriodKey,
+  getEndOfDay,
+  evaluateStreakRollover,
+  checkMilestoneFreezeReward,
+} from './streakLogic';
 
 export const submitCheckIn = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -26,6 +32,8 @@ export const submitCheckIn = functions.https.onCall(async (data, context) => {
   let allCompleted = false;
   let streakName = '';
   let participantUids: string[] = [];
+  let earnedMilestoneFreeze = false;
+  let finalFreezes = 2;
 
   await db.runTransaction(async (transaction) => {
     const streakDoc = await transaction.get(streakRef);
@@ -51,45 +59,83 @@ export const submitCheckIn = functions.https.onCall(async (data, context) => {
       );
     }
 
-    const currentCheckIns: string[] = streakData.currentPeriodCheckIns || [];
-    const periodKey = streakData.currentPeriodKey || new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const tz = streakData.timezone || 'UTC';
+    const todayKey = calculatePeriodKey(now, tz);
+    const isNewDay = Boolean(streakData.currentPeriodKey && streakData.currentPeriodKey !== todayKey);
 
-    // Idempotency check: already checked in for this period
+    // 1. Evaluate Rollover from previous days (handles streak freezes & breaks)
+    let currentCheckIns: string[] = isNewDay ? [] : (streakData.currentPeriodCheckIns || []);
+    let baseStreak = streakData.currentStreak || 0;
+    let currentFreezes = streakData.freezesRemaining ?? 2;
+
+    if (isNewDay && streakData.currentPeriodKey) {
+      const prevCheckIns: string[] = streakData.currentPeriodCheckIns || [];
+      const prevAllDone = participantUids.length > 0 && participantUids.every((p) => prevCheckIns.includes(p));
+
+      const rollover = evaluateStreakRollover(
+        streakData.currentPeriodKey,
+        todayKey,
+        prevAllDone,
+        baseStreak,
+        currentFreezes
+      );
+
+      baseStreak = rollover.streakCount;
+      currentFreezes = rollover.freezesRemaining;
+    }
+
+    // 2. Idempotency: user already checked in for today
     if (currentCheckIns.includes(uid)) {
-      updatedStreakCount = streakData.currentStreak;
+      updatedStreakCount = baseStreak;
+      allCompleted = participantUids.every((p) => currentCheckIns.includes(p));
+      finalFreezes = currentFreezes;
       return;
     }
 
+    // 3. Register user check-in
     const newCheckIns = [...currentCheckIns, uid];
-    allCompleted = participantUids.every((p) => newCheckIns.includes(p));
-
-    const nextStreak = allCompleted ? (streakData.currentStreak || 0) + 1 : (streakData.currentStreak || 0);
+    allCompleted = participantUids.length > 0 && participantUids.every((p) => newCheckIns.includes(p));
+    const nextStreak = allCompleted ? baseStreak + 1 : baseStreak;
     const longestStreak = Math.max(streakData.longestStreak || 0, nextStreak);
     updatedStreakCount = nextStreak;
+    const periodEnd = getEndOfDay(now, tz);
 
-    // 1. Record immutable check-in receipt document
-    const receiptRef = streakRef.collection('checkIns').doc(`${periodKey}_${uid}`);
+    // 4. Milestone Check: Award +1 streak freeze every 20 continuous days
+    finalFreezes = currentFreezes;
+    if (allCompleted) {
+      const milestone = checkMilestoneFreezeReward(nextStreak, currentFreezes, 20);
+      finalFreezes = milestone.newFreezesRemaining;
+      earnedMilestoneFreeze = milestone.earnedFreeze;
+    }
+
+    // 5. Write immutable check-in receipt document
+    const receiptRef = streakRef.collection('checkIns').doc(`${todayKey}_${uid}`);
     transaction.set(receiptRef, {
-      checkInId: `${periodKey}_${uid}`,
+      checkInId: `${todayKey}_${uid}`,
       streakId,
       userId: uid,
-      periodKey,
+      periodKey: todayKey,
       checkInTime: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // 2. Update streak state
+    // 6. Update streak state
     transaction.update(streakRef, {
+      currentPeriodKey: todayKey,
       currentPeriodCheckIns: newCheckIns,
+      currentPeriodEnd: admin.firestore.Timestamp.fromDate(periodEnd),
       currentStreak: nextStreak,
       longestStreak,
+      freezesRemaining: finalFreezes,
+      status: 'active',
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // 3. If cycle completed, record in history log
+    // 7. If cycle completed, record in history log
     if (allCompleted) {
-      const historyRef = streakRef.collection('history').doc(periodKey);
+      const historyRef = streakRef.collection('history').doc(todayKey);
       transaction.set(historyRef, {
-        periodKey,
+        periodKey: todayKey,
         completed: true,
         checkedInUids: newCheckIns,
         finalStreakCount: nextStreak,
@@ -115,5 +161,7 @@ export const submitCheckIn = functions.https.onCall(async (data, context) => {
     success: true,
     currentStreak: updatedStreakCount,
     allCompleted,
+    earnedFreeze: earnedMilestoneFreeze,
+    freezesRemaining: finalFreezes,
   };
 });
