@@ -12,6 +12,7 @@ import {
   persistentLocalCache,
   Firestore,
 } from 'firebase/firestore';
+import { getFunctions, Functions } from 'firebase/functions';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Safe environment or default configuration
@@ -47,4 +48,6 @@ try {
   db = getFirestore(app);
 }
 
-export { app, auth, db };
+const cloudFunctions: Functions = getFunctions(app);
+
+export { app, auth, db, cloudFunctions };

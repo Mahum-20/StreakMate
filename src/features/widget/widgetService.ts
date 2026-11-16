@@ -16,6 +16,7 @@ export interface WidgetStreakSnapshot {
   friendCheckedIn: boolean;
   friendName: string;
   hoursRemaining: number;
+  timeRemainingText: string;
   status: 'active' | 'at_risk' | 'broken' | 'paused' | 'frozen';
   isSolo: boolean;
 }
@@ -98,7 +99,9 @@ export const widgetService = {
     const endOfDayMillis = streak.currentPeriodEnd
       ? (streak.currentPeriodEnd.toDate ? streak.currentPeriodEnd.toDate().getTime() : getEndOfDay(new Date(), tz).getTime())
       : getEndOfDay(new Date(), tz).getTime();
-    const hoursRemaining = Math.max(0, Math.floor((endOfDayMillis - now) / (1000 * 60 * 60)));
+    const remainingMinutes = Math.max(0, Math.floor((endOfDayMillis - now) / (1000 * 60)));
+    const hoursRemaining = Math.max(0, Math.ceil(remainingMinutes / 60));
+    const timeRemainingText = remainingMinutes < 60 ? `${remainingMinutes}m` : `${hoursRemaining}h`;
 
     return {
       id: streak.id,
@@ -108,6 +111,7 @@ export const widgetService = {
       friendCheckedIn,
       friendName,
       hoursRemaining,
+      timeRemainingText,
       status: streak.status,
       isSolo,
     };
@@ -190,6 +194,7 @@ export const widgetService = {
             friendCheckedIn: snap.friendCheckedIn,
             friendName: snap.friendName,
             hoursRemaining: snap.hoursRemaining,
+            timeRemainingText: snap.timeRemainingText,
             status: snap.status,
             isSolo: snap.isSolo,
           };
@@ -205,6 +210,8 @@ export const widgetService = {
   /**
    * Processes any pending offline or instant home screen check-ins recorded
    * by the native widget BroadcastReceiver and synchronizes them to Firestore.
+   * Only acknowledges and removes successfully submitted actions; failed
+   * actions are preserved in the queue for retry.
    */
   async processPendingWidgetCheckIns(userId: string): Promise<void> {
     if (Platform.OS !== 'android' || !StreakWidgetModule?.getPendingCheckIns) {
@@ -217,22 +224,31 @@ export const widgetService = {
 
       const list = JSON.parse(raw);
       if (Array.isArray(list) && list.length > 0) {
+        const completedActionIds: string[] = [];
+
         for (const item of list) {
           if (item?.streakId) {
             try {
-              await streakService.submitCheckIn(item.streakId, userId);
+              await streakService.submitCheckIn(item.streakId, userId, item.actionId);
+              if (item.actionId) {
+                completedActionIds.push(item.actionId);
+              }
             } catch (checkErr) {
-              console.warn('Pending widget check-in processing notice:', checkErr);
+              console.warn('Pending widget check-in retry preserved:', checkErr);
             }
           }
         }
 
-        if (StreakWidgetModule.clearPendingCheckIns) {
-          await StreakWidgetModule.clearPendingCheckIns();
-        }
+        if (completedActionIds.length > 0) {
+          if (StreakWidgetModule.removeCompletedPendingCheckIns) {
+            await StreakWidgetModule.removeCompletedPendingCheckIns(JSON.stringify(completedActionIds));
+          } else if (StreakWidgetModule.clearPendingCheckIns) {
+            await StreakWidgetModule.clearPendingCheckIns();
+          }
 
-        const updatedStreaks = await streakService.getUserStreaks(userId);
-        await this.syncToNativeWidget(updatedStreaks, userId);
+          const updatedStreaks = await streakService.getUserStreaks(userId);
+          await this.syncToNativeWidget(updatedStreaks, userId);
+        }
       }
     } catch (err) {
       console.warn('Failed to process pending widget check-ins:', err);

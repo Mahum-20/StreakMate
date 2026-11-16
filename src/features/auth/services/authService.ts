@@ -10,7 +10,7 @@ import {
   signInWithCredential,
   User,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/core/config/firebase';
 import { widgetService } from '@/features/widget/widgetService';
 
@@ -84,37 +84,44 @@ export const authService = {
     // 2. Set Firebase Auth display name
     await updateProfile(user, { displayName: displayName.trim() });
 
-    // 3. Create Firestore User profile
+    // 3. Create Firestore User profile & reserve username atomically
     try {
       const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
-        uid: user.uid,
-        email: trimmedEmail,
-        displayName: displayName.trim(),
-        username: cleanUsername,
-        avatarUrl: null,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        stats: {
-          totalActiveStreaks: 0,
-          totalSavedStreaks: 0,
-          longestStreakEver: 0,
-        },
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      // 4. Register unique username lookup (public profile search directory)
       const usernameRef = doc(db, 'usernames', cleanUsername);
-      await setDoc(usernameRef, {
-        uid: user.uid,
-        username: cleanUsername,
-        displayName: displayName.trim(),
-        avatarUrl: null,
-        createdAt: serverTimestamp(),
+
+      await runTransaction(db, async (t) => {
+        const usernameSnap = await t.get(usernameRef);
+        if (usernameSnap.exists()) {
+          throw new Error(`Username "${cleanUsername}" is already taken.`);
+        }
+
+        t.set(userRef, {
+          uid: user.uid,
+          email: trimmedEmail,
+          displayName: displayName.trim(),
+          username: cleanUsername,
+          avatarUrl: null,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          stats: {
+            totalActiveStreaks: 0,
+            totalSavedStreaks: 0,
+            longestStreakEver: 0,
+          },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        t.set(usernameRef, {
+          uid: user.uid,
+          username: cleanUsername,
+          displayName: displayName.trim(),
+          avatarUrl: null,
+          createdAt: serverTimestamp(),
+        });
       });
     } catch (firestoreErr) {
-      console.warn('Firestore profile setup notice:', firestoreErr);
-      // Even if Firestore doc write failed, auth succeeded
+      console.warn('Atomic profile setup notice:', firestoreErr);
+      throw firestoreErr;
     }
 
     return user;
@@ -125,25 +132,39 @@ export const authService = {
       const userRef = doc(db, 'users', user.uid);
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists()) {
-        const cleanUsername =
-          (user.email?.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '') +
-          '_' +
-          Math.floor(Math.random() * 1000);
+        const baseName = (user.email?.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '');
+        const cleanUsername = `${baseName}_${Math.floor(100 + Math.random() * 900)}`;
 
-        await setDoc(userRef, {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName || 'StreakMate User',
-          username: cleanUsername,
-          avatarUrl: user.photoURL || null,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          stats: {
-            totalActiveStreaks: 0,
-            totalSavedStreaks: 0,
-            longestStreakEver: 0,
-          },
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+        await runTransaction(db, async (t) => {
+          let chosenUsername = cleanUsername;
+          const snap = await t.get(doc(db, 'usernames', chosenUsername));
+          if (snap.exists()) {
+            chosenUsername = `${baseName}_${Date.now().toString().slice(-4)}`;
+          }
+
+          t.set(userRef, {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || 'StreakMate User',
+            username: chosenUsername,
+            avatarUrl: user.photoURL || null,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            stats: {
+              totalActiveStreaks: 0,
+              totalSavedStreaks: 0,
+              longestStreakEver: 0,
+            },
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+
+          t.set(doc(db, 'usernames', chosenUsername), {
+            uid: user.uid,
+            username: chosenUsername,
+            displayName: user.displayName || 'StreakMate User',
+            avatarUrl: user.photoURL || null,
+            createdAt: serverTimestamp(),
+          });
         });
       }
     } catch (firestoreErr) {

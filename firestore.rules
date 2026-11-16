@@ -127,26 +127,31 @@ service cloud.firestore {
           (request.resource.data.isSolo == false && request.resource.data.participantUids.size() == 2)
         );
 
-      // Updating streak: strictly constrain affected keys and prevent participant/creator tampering
+      // Updating streak from client: strictly locked down to user-controlled metadata
+      // (status pause/resume, reminderLeadHours, nudge fields).
+      // Authoritative streak counters (currentStreak, longestStreak, freezesRemaining,
+      // currentPeriodCheckIns, currentPeriodKey, currentPeriodEnd) can ONLY be mutated
+      // by the authoritative Cloud Function via Admin SDK!
       allow update: if isAuthenticated()
         && request.auth.uid in resource.data.participantUids
         // Core immutable security invariants:
         && request.resource.data.creatorUid == resource.data.creatorUid
         && request.resource.data.participantUids == resource.data.participantUids
         && request.resource.data.isSolo == resource.data.isSolo
-        // Constrain modified keys:
+        // Client cannot modify authoritative streak counters or period boundaries:
+        && request.resource.data.currentStreak == resource.data.currentStreak
+        && request.resource.data.longestStreak == resource.data.longestStreak
+        && request.resource.data.freezesRemaining == resource.data.freezesRemaining
+        && request.resource.data.currentPeriodCheckIns == resource.data.currentPeriodCheckIns
+        && request.resource.data.currentPeriodKey == resource.data.currentPeriodKey
+        && request.resource.data.currentPeriodEnd == resource.data.currentPeriodEnd
+        // Constrain client-modifiable keys:
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'currentPeriodCheckIns', 'currentStreak', 'longestStreak',
-          'currentPeriodKey', 'currentPeriodStart', 'currentPeriodEnd',
-          'freezesRemaining', 'status', 'updatedAt',
-          'lastNudgeAt', 'lastNudgeBy', 'lastNudgePhrase', 'lastNudgeDismissed',
-          'lastLeadReminderPeriodKey', 'lastUrgentWarningPeriodKey'
+          'status', 'updatedAt', 'reminderLeadHours',
+          'lastNudgeAt', 'lastNudgeBy', 'lastNudgePhrase', 'lastNudgeDismissed'
         ])
-        // Streak counter cannot arbitrarily jump (cannot increase by more than 1 per update)
-        && request.resource.data.currentStreak >= 0
-        && request.resource.data.currentStreak <= resource.data.currentStreak + 1
-        // Valid status values only
-        && request.resource.data.status in ['active', 'paused', 'at_risk', 'frozen', 'broken'];
+        // Valid status values that a client can set (pause / resume only)
+        && request.resource.data.status in ['active', 'paused'];
 
       // Deletion: Only creator or participants can delete
       allow delete: if isAuthenticated() && (
@@ -154,22 +159,16 @@ service cloud.firestore {
         request.auth.uid in resource.data.participantUids
       );
 
-      // Subcollection: Check-in receipts (Participant-only reads, immutable receipts, cascade deletion allowed)
+      // Subcollection: Check-in receipts (Client READ-ONLY; writes strictly reserved to Cloud Functions)
       match /checkIns/{checkInId} {
         allow read: if isStreakParticipant(streakId);
-        allow create: if isStreakParticipant(streakId)
-          && request.resource.data.userId == request.auth.uid
-          && request.resource.data.streakId == streakId;
-        allow update: if false; // Receipts are strictly immutable
-        allow delete: if isStreakParticipant(streakId); // Permitted for cascading streak cleanup
+        allow write: if false;
       }
 
-      // Subcollection: History (Participant-only reads & writes)
+      // Subcollection: History (Client READ-ONLY; writes strictly reserved to Cloud Functions)
       match /history/{periodKey} {
         allow read: if isStreakParticipant(streakId);
-        allow create, update: if isStreakParticipant(streakId)
-          && request.resource.data.periodKey == periodKey;
-        allow delete: if isStreakParticipant(streakId);
+        allow write: if false;
       }
     }
 

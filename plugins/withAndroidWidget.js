@@ -715,6 +715,11 @@ class StreakWidgetProvider : AppWidgetProvider() {
         super.onReceive(context, intent)
 
         if (intent.action == ACTION_WIDGET_CHECKIN) {
+            val pkg = intent.getPackage()
+            if (pkg != null && pkg != context.packageName) {
+                Log.w("StreakWidgetProvider", "Untrusted package intent rejected: $pkg")
+                return
+            }
             val streakId = intent.getStringExtra(EXTRA_STREAK_ID)
             if (!streakId.isNullOrEmpty()) {
                 handleNativeCheckIn(context, streakId)
@@ -762,6 +767,8 @@ class StreakWidgetProvider : AppWidgetProvider() {
                 val pendingRaw = prefs.getString("pending_checkins", "[]")
                 val pendingArray = try { JSONArray(pendingRaw) } catch (e: Exception) { JSONArray() }
                 val item = JSONObject()
+                val actionId = "act_" + System.currentTimeMillis() + "_" + (1000..9999).random()
+                item.put("actionId", actionId)
                 item.put("streakId", streakId)
                 item.put("timestamp", System.currentTimeMillis())
                 pendingArray.put(item)
@@ -908,6 +915,8 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     views.setTextViewText(R.id.single_streak_number, "$count")
                     views.setTextViewText(R.id.single_streak_unit, if (count == 1) "day 🔥" else "days 🔥")
 
+                    val timeRemainingText = streakObj.optString("timeRemainingText", if (hoursRemaining > 0) "$hoursRemaining hrs" else "under 1 hr")
+
                     // Status and accountability text
                     val statusText: String
                     val bubbleText: String
@@ -916,7 +925,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                             statusText = "Completed today ✓"
                             bubbleText = "Crushed it! 🎉"
                         } else {
-                            statusText = "$hoursRemaining hrs remaining today"
+                            statusText = "$timeRemainingText remaining today"
                             bubbleText = speechBubbleTextSingle
                         }
                     } else {
@@ -930,7 +939,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                             statusText = "$friendName checked in! Your turn ⚡"
                             bubbleText = "$friendName did it! 🔥"
                         } else {
-                            statusText = "Both pending • $hoursRemaining hrs left"
+                            statusText = "Both pending • $timeRemainingText left"
                             bubbleText = speechBubbleTextSingle
                         }
                     }
@@ -949,6 +958,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     // 1. One-tap instant broadcast action for checkbox
                     val broadcastIntent = Intent(context, StreakWidgetProvider::class.java).apply {
                         action = ACTION_WIDGET_CHECKIN
+                        setPackage(context.packageName)
                         putExtra(EXTRA_STREAK_ID, streakId)
                     }
                     val broadcastPending = PendingIntent.getBroadcast(
@@ -993,11 +1003,13 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     val s1FriendName = s1.optString("friendName", "Partner")
                     val s1Hours = s1.optInt("hoursRemaining", 4)
 
+                    val s1Time = s1.optString("timeRemainingText", if (s1Hours > 0) "$s1Hours hrs" else "under 1 hr")
+
                     views.setTextViewText(R.id.two_streak_1_name, s1Name)
                     views.setTextViewText(R.id.two_streak_1_count, "$s1Count " + (if (s1Count == 1) "day 🔥" else "days 🔥"))
 
                     val s1Status: String = if (s1Solo) {
-                        if (s1Checked) "• Done ✓" else "• $s1Hours hrs left"
+                        if (s1Checked) "• Done ✓" else "• $s1Time left"
                     } else {
                         if (s1Checked && s1FriendChecked) "• Both done ✓"
                         else if (s1Checked && !s1FriendChecked) "• Waiting for $s1FriendName"
@@ -1017,6 +1029,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     // Native broadcast for Streak 1 checkbox
                     val bIntent1 = Intent(context, StreakWidgetProvider::class.java).apply {
                         action = ACTION_WIDGET_CHECKIN
+                        setPackage(context.packageName)
                         putExtra(EXTRA_STREAK_ID, s1Id)
                     }
                     val bPending1 = PendingIntent.getBroadcast(
@@ -1051,12 +1064,13 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     val s2FriendChecked = s2.optBoolean("friendCheckedIn", false)
                     val s2FriendName = s2.optString("friendName", "Partner")
                     val s2Hours = s2.optInt("hoursRemaining", 4)
+                    val s2Time = s2.optString("timeRemainingText", if (s2Hours > 0) "$s2Hours hrs" else "under 1 hr")
 
                     views.setTextViewText(R.id.two_streak_2_name, s2Name)
                     views.setTextViewText(R.id.two_streak_2_count, "$s2Count " + (if (s2Count == 1) "day 🔥" else "days 🔥"))
 
                     val s2Status: String = if (s2Solo) {
-                        if (s2Checked) "• Done ✓" else "• $s2Hours hrs left"
+                        if (s2Checked) "• Done ✓" else "• $s2Time left"
                     } else {
                         if (s2Checked && s2FriendChecked) "• Both done ✓"
                         else if (s2Checked && !s2FriendChecked) "• Waiting for $s2FriendName"
@@ -1076,6 +1090,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                     // Native broadcast for Streak 2 checkbox
                     val bIntent2 = Intent(context, StreakWidgetProvider::class.java).apply {
                         action = ACTION_WIDGET_CHECKIN
+                        setPackage(context.packageName)
                         putExtra(EXTRA_STREAK_ID, s2Id)
                     }
                     val bPending2 = PendingIntent.getBroadcast(
@@ -1176,6 +1191,33 @@ class StreakWidgetModule(reactContext: ReactApplicationContext) : ReactContextBa
             promise.resolve(true)
         } catch (e: Exception) {
             promise.reject("CLEAR_PENDING_ERROR", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun removeCompletedPendingCheckIns(completedActionIdsJson: String, promise: Promise) {
+        try {
+            val context = reactApplicationContext
+            val prefs = context.getSharedPreferences("StreakWidgetPrefs", Context.MODE_PRIVATE)
+            val raw = prefs.getString("pending_checkins", "[]") ?: "[]"
+            val pendingArray = try { JSONArray(raw) } catch (e: Exception) { JSONArray() }
+            val completedArray = try { JSONArray(completedActionIdsJson) } catch (e: Exception) { JSONArray() }
+            val completedSet = HashSet<String>()
+            for (i in 0 until completedArray.length()) {
+                completedSet.add(completedArray.getString(i))
+            }
+            val remainingArray = JSONArray()
+            for (i in 0 until pendingArray.length()) {
+                val item = pendingArray.getJSONObject(i)
+                val actId = item.optString("actionId", "")
+                if (!completedSet.contains(actId)) {
+                    remainingArray.put(item)
+                }
+            }
+            prefs.edit().putString("pending_checkins", remainingArray.toString()).apply()
+            promise.resolve(true)
+        } catch (e: Exception) {
+            promise.reject("REMOVE_PENDING_ERROR", e.message)
         }
     }
 

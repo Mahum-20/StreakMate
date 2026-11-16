@@ -214,6 +214,28 @@ describe('Streak Calculation & Lifecycle Logic Engine', () => {
       expect(result.status).toBe('broken');
       expect(result.isBroken).toBe(true);
     });
+
+    it('does not double-deduct freeze when last period was already frozen by scheduled monitor', () => {
+      // Monday (Nov 10) was missed and already frozen by monitor (status: 'frozen', 1 freeze remaining).
+      // Now it is Tuesday (Nov 11) and user is checking in.
+      const result = evaluateStreakRollover('2026-11-10', '2026-11-11', false, 7, 1, 'frozen');
+      expect(result.streakCount).toBe(7);
+      expect(result.freezesRemaining).toBe(1); // Freeze is NOT deducted again!
+      expect(result.freezesUsed).toBe(0);
+      expect(result.status).toBe('active');
+      expect(result.missedDays).toBe(0);
+    });
+
+    it('deducts only 1 freeze when streak was already frozen and user misses a subsequent day', () => {
+      // Monday (Nov 10) was missed and already frozen.
+      // User then misses all of Tuesday (Nov 11), now it is Wednesday (Nov 12).
+      const result = evaluateStreakRollover('2026-11-10', '2026-11-12', false, 7, 1, 'frozen');
+      expect(result.streakCount).toBe(7); // Preserved!
+      expect(result.freezesRemaining).toBe(0); // 1 -> 0 for Tuesday only
+      expect(result.freezesUsed).toBe(1);
+      expect(result.status).toBe('frozen');
+      expect(result.missedDays).toBe(1);
+    });
   });
 
   describe('Milestone Freeze Rewards (+1 Every 20 Continuous Days)', () => {

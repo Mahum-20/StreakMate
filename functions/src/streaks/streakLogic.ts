@@ -112,7 +112,8 @@ export function evaluateStreakRollover(
   todayKey: string,
   lastPeriodCompleted: boolean,
   currentStreak: number,
-  freezesRemaining: number = 2
+  freezesRemaining: number = 2,
+  lastPeriodStatus?: string
 ): StreakRolloverResult {
   if (!lastPeriodKey || lastPeriodKey === todayKey) {
     return {
@@ -137,7 +138,10 @@ export function evaluateStreakRollover(
     };
   }
 
-  const missedDays = lastPeriodCompleted ? Math.max(0, elapsedDays - 1) : elapsedDays;
+  // If last period was completed OR was already frozen by the expiration monitor,
+  // that period itself is protected/neutralized and does not incur a double freeze deduction.
+  const wasProtected = lastPeriodCompleted || lastPeriodStatus === 'frozen';
+  const missedDays = wasProtected ? Math.max(0, elapsedDays - 1) : elapsedDays;
 
   if (missedDays === 0) {
     return {

@@ -16,7 +16,7 @@ export const submitCheckIn = functions.https.onCall(async (data, context) => {
     );
   }
 
-  const { streakId } = data;
+  const { streakId, actionId } = data;
   if (!streakId || typeof streakId !== 'string') {
     throw new functions.https.HttpsError(
       'invalid-argument',
@@ -78,7 +78,8 @@ export const submitCheckIn = functions.https.onCall(async (data, context) => {
         todayKey,
         prevAllDone,
         baseStreak,
-        currentFreezes
+        currentFreezes,
+        streakData.status
       );
 
       baseStreak = rollover.streakCount;
@@ -116,6 +117,7 @@ export const submitCheckIn = functions.https.onCall(async (data, context) => {
       streakId,
       userId: uid,
       periodKey: todayKey,
+      actionId: actionId || null,
       checkInTime: admin.firestore.FieldValue.serverTimestamp(),
     });
 

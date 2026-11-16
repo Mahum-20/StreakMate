@@ -9,7 +9,7 @@ exports.submitCheckIn = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'You must be signed in to submit a check-in.');
     }
-    const { streakId } = data;
+    const { streakId, actionId } = data;
     if (!streakId || typeof streakId !== 'string') {
         throw new functions.https.HttpsError('invalid-argument', 'A valid streakId is required.');
     }
@@ -47,7 +47,7 @@ exports.submitCheckIn = functions.https.onCall(async (data, context) => {
         if (isNewDay && streakData.currentPeriodKey) {
             const prevCheckIns = streakData.currentPeriodCheckIns || [];
             const prevAllDone = participantUids.length > 0 && participantUids.every((p) => prevCheckIns.includes(p));
-            const rollover = (0, streakLogic_1.evaluateStreakRollover)(streakData.currentPeriodKey, todayKey, prevAllDone, baseStreak, currentFreezes);
+            const rollover = (0, streakLogic_1.evaluateStreakRollover)(streakData.currentPeriodKey, todayKey, prevAllDone, baseStreak, currentFreezes, streakData.status);
             baseStreak = rollover.streakCount;
             currentFreezes = rollover.freezesRemaining;
         }
@@ -79,6 +79,7 @@ exports.submitCheckIn = functions.https.onCall(async (data, context) => {
             streakId,
             userId: uid,
             periodKey: todayKey,
+            actionId: actionId || null,
             checkInTime: admin.firestore.FieldValue.serverTimestamp(),
         });
         // 6. Update streak state

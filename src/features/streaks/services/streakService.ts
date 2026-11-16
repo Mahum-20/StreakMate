@@ -9,17 +9,16 @@ import {
   onSnapshot,
   query,
   where,
-  runTransaction,
   serverTimestamp,
   Timestamp,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '@/core/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, cloudFunctions } from '@/core/config/firebase';
 import {
   calculatePeriodKey,
   getEndOfDay,
   evaluateStreakRollover,
-  checkMilestoneFreezeReward,
 } from '@/core/utils/streakLogic';
 
 export interface StreakData {
@@ -265,13 +264,14 @@ export const streakService = {
   },
 
   /**
-   * Submits a check-in for the current period using an atomic transaction.
-   * Handles automatic streak freeze deduction on rollover and awards
-   * +1 streak freeze on 20-day milestones.
+   * Submits a check-in through the authoritative Cloud Function.
+   * Ensures all streak counters, rollover, milestone rewards, and receipts
+   * are computed and committed on the server.
    */
   async submitCheckIn(
     streakId: string,
-    userId: string
+    _userId?: string,
+    actionId?: string
   ): Promise<{
     success: boolean;
     allCompleted: boolean;
@@ -279,112 +279,22 @@ export const streakService = {
     earnedFreeze: boolean;
     freezesRemaining: number;
   }> {
-    const streakRef = doc(db, 'streaks', streakId);
-
-    return await runTransaction(db, async (transaction) => {
-      const streakSnap = await transaction.get(streakRef);
-      if (!streakSnap.exists()) {
-        throw new Error('Streak does not exist');
-      }
-
-      const data = streakSnap.data();
-      const participants: string[] = data.participantUids || [];
-      const now = new Date();
-      const tz = data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const todayKey = calculatePeriodKey(now, tz);
-      const isNewDay = Boolean(data.currentPeriodKey && data.currentPeriodKey !== todayKey);
-
-      // 1. Evaluate Rollover from previous days using evaluateStreakRollover
-      let currentCheckIns: string[] = isNewDay ? [] : (data.currentPeriodCheckIns || []);
-      let baseStreak = data.currentStreak || 0;
-      let currentFreezes = data.freezesRemaining ?? 2;
-
-      if (isNewDay && data.currentPeriodKey) {
-        const prevCheckIns: string[] = data.currentPeriodCheckIns || [];
-        const prevAllDone = participants.length > 0 && participants.every((p) => prevCheckIns.includes(p));
-
-        const rollover = evaluateStreakRollover(
-          data.currentPeriodKey,
-          todayKey,
-          prevAllDone,
-          baseStreak,
-          currentFreezes
-        );
-
-        baseStreak = rollover.streakCount;
-        currentFreezes = rollover.freezesRemaining;
-      }
-
-      // 2. Idempotency: User already checked in for today
-      if (currentCheckIns.includes(userId)) {
-        const allDone = participants.every((p) => currentCheckIns.includes(p));
-        return {
-          success: true,
-          allCompleted: allDone,
-          streakCount: baseStreak,
-          earnedFreeze: false,
-          freezesRemaining: currentFreezes,
-        };
-      }
-
-      // 3. Register user check-in
-      const newCheckIns = [...currentCheckIns, userId];
-      const allCompleted = participants.length > 0 && participants.every((p) => newCheckIns.includes(p));
-      const newStreakCount = allCompleted ? baseStreak + 1 : baseStreak;
-      const newLongest = Math.max(data.longestStreak || 0, newStreakCount);
-      const periodEnd = getEndOfDay(now, tz);
-
-      // 4. Milestone Check: Award +1 streak freeze every 20 continuous days!
-      let finalFreezes = currentFreezes;
-      let earnedMilestoneFreeze = false;
-      if (allCompleted) {
-        const milestone = checkMilestoneFreezeReward(newStreakCount, currentFreezes, 20);
-        finalFreezes = milestone.newFreezesRemaining;
-        earnedMilestoneFreeze = milestone.earnedFreeze;
-      }
-
-      // 5. Write immutable receipt document for today's check-in
-      const receiptRef = doc(db, 'streaks', streakId, 'checkIns', `${todayKey}_${userId}`);
-      transaction.set(receiptRef, {
-        checkInId: `${todayKey}_${userId}`,
-        streakId,
-        userId,
-        periodKey: todayKey,
-        checkInTime: serverTimestamp(),
-      });
-
-      // 6. Update streak document in Firestore
-      transaction.update(streakRef, {
-        currentPeriodKey: todayKey,
-        currentPeriodCheckIns: newCheckIns,
-        currentPeriodEnd: Timestamp.fromDate(periodEnd),
-        currentStreak: newStreakCount,
-        longestStreak: newLongest,
-        freezesRemaining: finalFreezes,
-        status: 'active',
-        updatedAt: serverTimestamp(),
-      });
-
-      // 7. If all completed, log to history
-      if (allCompleted) {
-        const historyRef = doc(db, 'streaks', streakId, 'history', todayKey);
-        transaction.set(historyRef, {
-          periodKey: todayKey,
-          completed: true,
-          checkedInUids: newCheckIns,
-          finalStreakCount: newStreakCount,
-          finalizedAt: serverTimestamp(),
-        });
-      }
+    try {
+      const callable = httpsCallable(cloudFunctions, 'submitCheckIn');
+      const res = await callable({ streakId, actionId });
+      const data = res.data as any;
 
       return {
-        success: true,
-        allCompleted,
-        streakCount: newStreakCount,
-        earnedFreeze: earnedMilestoneFreeze,
-        freezesRemaining: finalFreezes,
+        success: Boolean(data.success),
+        allCompleted: Boolean(data.allCompleted),
+        streakCount: Number(data.currentStreak ?? 0),
+        earnedFreeze: Boolean(data.earnedFreeze),
+        freezesRemaining: Number(data.freezesRemaining ?? 2),
       };
-    });
+    } catch (err: any) {
+      console.warn('Authoritative submitCheckIn error:', err);
+      throw err;
+    }
   },
 
   /**
@@ -404,44 +314,18 @@ export const streakService = {
   },
 
   /**
-   * Deletes a streak permanently from Firestore.
-   * Performs recursive cascading deletion of subcollections ('checkIns', 'history')
-   * and related nudges to ensure clean referential integrity and avoid orphaned documents.
+   * Deletes a streak permanently via server-authoritative cascading deletion Cloud Function.
+   * Recursively deletes check-in receipts, history logs, and related nudges before removing the streak.
    */
   async deleteStreak(streakId: string): Promise<void> {
-    const streakRef = doc(db, 'streaks', streakId);
-
     try {
-      // 1. Delete all check-in receipts in subcollection
-      const checkInsRef = collection(db, 'streaks', streakId, 'checkIns');
-      const checkInsSnap = await getDocs(checkInsRef);
-      const deletePromises: Promise<void>[] = [];
-
-      checkInsSnap.forEach((docSnap) => {
-        deletePromises.push(deleteDoc(docSnap.ref));
-      });
-
-      // 2. Delete all history logs in subcollection
-      const historyRef = collection(db, 'streaks', streakId, 'history');
-      const historySnap = await getDocs(historyRef);
-      historySnap.forEach((docSnap) => {
-        deletePromises.push(deleteDoc(docSnap.ref));
-      });
-
-      // 3. Delete any social nudges referencing this streak
-      const nudgesRef = collection(db, 'nudges');
-      const nudgesQuery = query(nudgesRef, where('streakId', '==', streakId));
-      const nudgesSnap = await getDocs(nudgesQuery);
-      nudgesSnap.forEach((docSnap) => {
-        deletePromises.push(deleteDoc(docSnap.ref));
-      });
-
-      await Promise.all(deletePromises);
-    } catch (cleanupErr) {
-      console.warn('Cascading subcollection deletion notice:', cleanupErr);
+      const callable = httpsCallable(cloudFunctions, 'deleteStreak');
+      await callable({ streakId });
+    } catch (err) {
+      console.warn('Backend deleteStreak callable notice:', err);
+      // Fallback: direct delete of parent document if callable unavailable
+      const streakRef = doc(db, 'streaks', streakId);
+      await deleteDoc(streakRef);
     }
-
-    // 4. Finally delete the parent streak document
-    await deleteDoc(streakRef);
   },
 };
