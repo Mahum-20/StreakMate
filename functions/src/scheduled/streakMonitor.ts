@@ -151,54 +151,104 @@ export const monitorStreakExpirations = functions.pubsub
         continue;
       }
 
-      // 2. Final Urgent Warning: 30 minutes or less remaining (Deduplicated per period)
-      if (remainingMinutes > 0 && remainingMinutes <= 30) {
-        if (data.lastUrgentWarningPeriodKey === periodKey) {
-          continue;
-        }
+      // Helper to atomically claim and dispatch reminders via notificationOutbox
+      // Guarantees zero duplicate notifications across concurrent Cloud Function executions
+      const claimAndDispatchReminder = async (
+        type: 'urgent_warning' | 'lead_reminder',
+        notificationTitle: string,
+        notificationBody: string
+      ) => {
+        const outboxId = `${streakDoc.id}_${periodKey}_${type}`;
+        const outboxRef = db.collection('notificationOutbox').doc(outboxId);
 
-        await streakDoc.ref.update({
-          status: 'at_risk',
-          lastUrgentWarningPeriodKey: periodKey,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        let shouldDispatch = false;
+        let targetUids: string[] = [];
+
+        await db.runTransaction(async (t) => {
+          const outboxSnap = await t.get(outboxRef);
+          if (outboxSnap.exists) {
+            return; // Already claimed or sent by a concurrent worker
+          }
+
+          const freshDoc = await t.get(streakDoc.ref);
+          if (!freshDoc.exists) return;
+          const fresh = freshDoc.data()!;
+
+          if (fresh.status === 'deleting' || fresh.status === 'broken' || fresh.status === 'paused') {
+            return;
+          }
+          if (fresh.currentPeriodKey !== periodKey) {
+            return;
+          }
+
+          const markerField = type === 'urgent_warning' ? 'lastUrgentWarningPeriodKey' : 'lastLeadReminderPeriodKey';
+          if (fresh[markerField] === periodKey) {
+            return;
+          }
+
+          const freshCheckedIns: string[] = fresh.currentPeriodCheckIns || [];
+          const freshParticipants: string[] = fresh.participantUids || [];
+          targetUids = freshParticipants.filter((u) => !freshCheckedIns.includes(u));
+          if (targetUids.length === 0) {
+            return;
+          }
+
+          shouldDispatch = true;
+          t.set(outboxRef, {
+            id: outboxId,
+            streakId: streakDoc.id,
+            periodKey,
+            type,
+            claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+            delivered: false,
+          });
+
+          t.update(streakDoc.ref, {
+            ...(type === 'urgent_warning' ? { status: 'at_risk' } : {}),
+            [markerField]: periodKey,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
         });
 
-        for (const uid of missingUids) {
-          await sendStreakNotification({
-            streakId: streakDoc.id,
-            streakName: data.name,
-            recipientUid: uid,
-            title: `30 Minutes Left! Save ${data.name} 🔥`,
-            body: `Your streak will break in 30 minutes. Complete your check-in now!`,
-          }).catch((err) => console.warn('Warning notification failure', err));
+        if (shouldDispatch && targetUids.length > 0) {
+          for (const uid of targetUids) {
+            await sendStreakNotification({
+              streakId: streakDoc.id,
+              streakName: data.name,
+              recipientUid: uid,
+              title: notificationTitle,
+              body: notificationBody,
+            }).catch((err) => console.warn(`Reminder ${type} notification failure:`, err));
+          }
+
+          await outboxRef.update({
+            delivered: true,
+            deliveredAt: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch((err) => console.warn('Outbox update notice:', err));
         }
+      };
+
+      // 2. Final Urgent Warning: 30 minutes or less remaining (Atomically claimed via Outbox)
+      if (remainingMinutes > 0 && remainingMinutes <= 30) {
+        await claimAndDispatchReminder(
+          'urgent_warning',
+          `30 Minutes Left! Save ${data.name} 🔥`,
+          `Your streak will break in 30 minutes. Complete your check-in now!`
+        );
         continue;
       }
 
-      // 3. Lead Reminder: 3 hours or less remaining (Deduplicated per period)
+      // 3. Lead Reminder: 3 hours or less remaining (Atomically claimed via Outbox)
       if (remainingMinutes > 30 && remainingMinutes <= 180) {
-        if (data.lastLeadReminderPeriodKey === periodKey) {
-          continue;
-        }
-
-        await streakDoc.ref.update({
-          lastLeadReminderPeriodKey: periodKey,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
         const displayHours = remainingMinutes > 60
           ? `${Math.floor(remainingMinutes / 60)} hours`
           : `${remainingMinutes} mins`;
 
-        for (const uid of missingUids) {
-          await sendStreakNotification({
-            streakId: streakDoc.id,
-            streakName: data.name,
-            recipientUid: uid,
-            title: `Save your ${data.name} streak ⏳`,
-            body: `${displayHours} remaining to check in today. Don't let your streak break!`,
-          }).catch((err) => console.warn('Reminder failure', err));
-        }
+        await claimAndDispatchReminder(
+          'lead_reminder',
+          `Save your ${data.name} streak ⏳`,
+          `${displayHours} remaining to check in today. Don't let your streak break!`
+        );
       }
     }
   });

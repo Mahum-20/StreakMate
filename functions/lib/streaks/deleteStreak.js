@@ -24,16 +24,22 @@ exports.deleteStreak = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('not-found', 'Streak not found.');
     }
     const streakData = streakSnap.data();
-    const participantUids = streakData.participantUids || [];
     const creatorUid = streakData.creatorUid;
-    if (creatorUid !== uid && !participantUids.includes(uid)) {
-        throw new functions.https.HttpsError('permission-denied', 'You do not have permission to delete this streak.');
+    // Strict ownership: only the creator can permanently delete a streak
+    if (creatorUid !== uid) {
+        throw new functions.https.HttpsError('permission-denied', 'Only the streak creator can permanently delete this streak.');
     }
-    // Set status to 'deleting' immediately to block concurrent check-ins, nudges, and monitor jobs
-    await streakRef.update({
+    // Set status to 'deleting' and record deletion job state for recovery & auditing
+    await streakRef.set({
         status: 'deleting',
+        deletionJob: {
+            startedAt: admin.firestore.FieldValue.serverTimestamp(),
+            initiatedBy: uid,
+            step: 'in_progress',
+            attempts: admin.firestore.FieldValue.increment(1),
+        },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, { merge: true });
     // Helper: batch delete a query in chunks of up to 400 docs
     const deleteQueryBatch = async (query) => {
         while (true) {
@@ -47,15 +53,29 @@ exports.deleteStreak = functions.https.onCall(async (data, context) => {
                 break;
         }
     };
-    // 1. Delete all check-in receipt documents in subcollection
-    await deleteQueryBatch(streakRef.collection('checkIns'));
-    // 2. Delete all history log documents in subcollection
-    await deleteQueryBatch(streakRef.collection('history'));
-    // 3. Delete related nudges
-    const nudgesQuery = db.collection('nudges').where('streakId', '==', streakId);
-    await deleteQueryBatch(nudgesQuery);
-    // 4. Finally delete the parent streak document
-    await streakRef.delete();
+    try {
+        // 1. Delete all check-in receipt documents in subcollection
+        await deleteQueryBatch(streakRef.collection('checkIns'));
+        // 2. Delete all history log documents in subcollection
+        await deleteQueryBatch(streakRef.collection('history'));
+        // 3. Delete related nudges
+        const nudgesQuery = db.collection('nudges').where('streakId', '==', streakId);
+        await deleteQueryBatch(nudgesQuery);
+        // 4. Finally delete the parent streak document
+        await streakRef.delete();
+    }
+    catch (err) {
+        // Mark deletion failure state so user/client can inspect and safely re-invoke to finish cleanup
+        await streakRef.set({
+            deletionJob: {
+                step: 'failed',
+                lastError: err?.message || 'Streak deletion interrupted',
+                failedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true }).catch(() => { });
+        throw new functions.https.HttpsError('internal', `Streak deletion interrupted: ${err?.message || err}. Re-calling will safely resume cleanup.`);
+    }
     return { success: true };
 });
 //# sourceMappingURL=deleteStreak.js.map

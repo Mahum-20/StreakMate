@@ -709,6 +709,17 @@ class StreakWidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_WIDGET_CHECKIN = "com.streakmate.app.ACTION_WIDGET_CHECKIN"
         const val EXTRA_STREAK_ID = "streak_id"
+        const val EXTRA_SECURITY_TOKEN = "security_token"
+
+        fun getOrCreateWidgetToken(context: Context): String {
+            val prefs = context.getSharedPreferences("StreakWidgetPrefs", Context.MODE_PRIVATE)
+            var token = prefs.getString("internal_widget_token", null)
+            if (token == null) {
+                token = java.util.UUID.randomUUID().toString()
+                prefs.edit().putString("internal_widget_token", token).apply()
+            }
+            return token
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -720,6 +731,15 @@ class StreakWidgetProvider : AppWidgetProvider() {
                 Log.w("StreakWidgetProvider", "Untrusted package intent rejected: $pkg")
                 return
             }
+
+            // Cryptographic token validation: ensures broadcast originated from StreakMate's own widget UI
+            val receivedToken = intent.getStringExtra(EXTRA_SECURITY_TOKEN)
+            val expectedToken = getOrCreateWidgetToken(context)
+            if (receivedToken.isNullOrEmpty() || receivedToken != expectedToken) {
+                Log.w("StreakWidgetProvider", "Untrusted broadcast rejected: missing or invalid security token")
+                return
+            }
+
             val streakId = intent.getStringExtra(EXTRA_STREAK_ID)
             if (!streakId.isNullOrEmpty()) {
                 handleNativeCheckIn(context, streakId)
@@ -960,6 +980,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                         action = ACTION_WIDGET_CHECKIN
                         setPackage(context.packageName)
                         putExtra(EXTRA_STREAK_ID, streakId)
+                        putExtra(EXTRA_SECURITY_TOKEN, getOrCreateWidgetToken(context))
                     }
                     val broadcastPending = PendingIntent.getBroadcast(
                         context,
@@ -1031,6 +1052,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                         action = ACTION_WIDGET_CHECKIN
                         setPackage(context.packageName)
                         putExtra(EXTRA_STREAK_ID, s1Id)
+                        putExtra(EXTRA_SECURITY_TOKEN, getOrCreateWidgetToken(context))
                     }
                     val bPending1 = PendingIntent.getBroadcast(
                         context,
@@ -1092,6 +1114,7 @@ class StreakWidgetProvider : AppWidgetProvider() {
                         action = ACTION_WIDGET_CHECKIN
                         setPackage(context.packageName)
                         putExtra(EXTRA_STREAK_ID, s2Id)
+                        putExtra(EXTRA_SECURITY_TOKEN, getOrCreateWidgetToken(context))
                     }
                     val bPending2 = PendingIntent.getBroadcast(
                         context,

@@ -60,10 +60,13 @@ service cloud.firestore {
     // ===============================================================
     match /usernames/{username} {
       allow read: if isAuthenticated();
-      // Only authenticated owner can claim their unique username
+      // Only authenticated user can claim their username, and it MUST strictly match
+      // the username assigned in their own user profile document.
+      // This eliminates username hoarding and prevents reserving unassigned names!
       allow create: if isAuthenticated()
         && request.resource.data.uid == request.auth.uid
-        && request.resource.data.username == username;
+        && request.resource.data.username == username
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username == username;
       // Immutable once registered; cannot transfer usernames
       allow update: if false;
       allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
@@ -112,15 +115,10 @@ service cloud.firestore {
       // Only the two mutual participants can read their friendship
       allow read: if isAuthenticated() && request.auth.uid in resource.data.participantUids;
 
-      // Creation from client: must have deterministic ID and recipient must be authenticated
-      allow create: if isAuthenticated()
-        && request.resource.data.participantUids.size() == 2
-        && request.auth.uid in request.resource.data.participantUids
-        && request.resource.data.participantUids[0] != request.resource.data.participantUids[1]
-        && (
-          friendshipId == request.resource.data.participantUids[0] + '_' + request.resource.data.participantUids[1] ||
-          friendshipId == request.resource.data.participantUids[1] + '_' + request.resource.data.participantUids[0]
-        );
+      // Creation from client: STRICTLY DISABLED.
+      // Friendships can ONLY be provisioned by the server-authoritative Cloud Function acceptFriendRequest!
+      // This completely closes the acceptance bypass vulnerability.
+      allow create: if false;
 
       // Update: participants cannot be mutated; only activity/metadata can update
       allow update: if isAuthenticated()
@@ -183,11 +181,8 @@ service cloud.firestore {
         // Valid status values that a client can set (pause / resume only)
         && request.resource.data.status in ['active', 'paused'];
 
-      // Deletion: Only creator or participants can delete
-      allow delete: if isAuthenticated() && (
-        resource.data.creatorUid == request.auth.uid ||
-        request.auth.uid in resource.data.participantUids
-      );
+      // Deletion: strictly limited to the streak creator
+      allow delete: if isAuthenticated() && resource.data.creatorUid == request.auth.uid;
 
       // Subcollection: Check-in receipts (Client READ-ONLY; writes strictly reserved to Cloud Functions)
       match /checkIns/{checkInId} {

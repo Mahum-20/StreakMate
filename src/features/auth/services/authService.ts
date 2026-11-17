@@ -10,7 +10,7 @@ import {
   signInWithCredential,
   User,
 } from 'firebase/auth';
-import { doc, getDoc, updateDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, deleteDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/core/config/firebase';
 import { widgetService } from '@/features/widget/widgetService';
 
@@ -133,44 +133,70 @@ export const authService = {
     try {
       const userRef = doc(db, 'users', user.uid);
       const userSnap = await getDoc(userRef);
-      if (!userSnap.exists()) {
-        const baseName = (user.email?.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '');
-        const cleanUsername = `${baseName}_${Math.floor(100 + Math.random() * 900)}`;
 
-        await runTransaction(db, async (t) => {
-          let chosenUsername = cleanUsername;
-          const snap = await t.get(doc(db, 'usernames', chosenUsername));
-          if (snap.exists()) {
-            chosenUsername = `${baseName}_${Date.now().toString().slice(-4)}`;
+      // 1. If user profile already exists, verify and repair missing username index
+      if (userSnap.exists()) {
+        const existingData = userSnap.data();
+        const username = existingData?.username;
+        if (username) {
+          const usernameDocRef = doc(db, 'usernames', username);
+          const usernameSnap = await getDoc(usernameDocRef);
+          if (!usernameSnap.exists()) {
+            // Self-repair: reconstruct missing username index document
+            await setDoc(usernameDocRef, {
+              uid: user.uid,
+              username,
+              displayName: existingData.displayName || user.displayName || 'StreakMate User',
+              avatarUrl: existingData.avatarUrl || user.photoURL || null,
+              createdAt: serverTimestamp(),
+            });
           }
-
-          t.set(userRef, {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName || 'StreakMate User',
-            username: chosenUsername,
-            avatarUrl: user.photoURL || null,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            stats: {
-              totalActiveStreaks: 0,
-              totalSavedStreaks: 0,
-              longestStreakEver: 0,
-            },
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-
-          t.set(doc(db, 'usernames', chosenUsername), {
-            uid: user.uid,
-            username: chosenUsername,
-            displayName: user.displayName || 'StreakMate User',
-            avatarUrl: user.photoURL || null,
-            createdAt: serverTimestamp(),
-          });
-        });
+        }
+        return user;
       }
+
+      // 2. Provision new user profile with collision-safe unique username
+      const baseName = (user.email?.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9_]/g, '') || 'user';
+      let candidate = `${baseName}_${Math.floor(100 + Math.random() * 900)}`;
+
+      await runTransaction(db, async (t) => {
+        let chosenUsername = candidate;
+        let snap = await t.get(doc(db, 'usernames', chosenUsername));
+        if (snap.exists()) {
+          chosenUsername = `${baseName}_${Math.floor(1000 + Math.random() * 9000)}`;
+          snap = await t.get(doc(db, 'usernames', chosenUsername));
+          if (snap.exists()) {
+            chosenUsername = `${baseName}_${Date.now().toString().slice(-6)}`;
+          }
+        }
+
+        t.set(userRef, {
+          uid: user.uid,
+          email: user.email || '',
+          displayName: user.displayName || 'StreakMate User',
+          username: chosenUsername,
+          avatarUrl: user.photoURL || null,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          stats: {
+            totalActiveStreaks: 0,
+            totalSavedStreaks: 0,
+            longestStreakEver: 0,
+          },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        t.set(doc(db, 'usernames', chosenUsername), {
+          uid: user.uid,
+          username: chosenUsername,
+          displayName: user.displayName || 'StreakMate User',
+          avatarUrl: user.photoURL || null,
+          createdAt: serverTimestamp(),
+        });
+      });
     } catch (firestoreErr) {
-      console.warn('Google sign-in Firestore sync notice:', firestoreErr);
+      console.warn('Firestore sync notice:', firestoreErr);
+      throw firestoreErr;
     }
 
     return user;
@@ -267,5 +293,40 @@ export const authService = {
       console.warn('Widget cleanup on logout notice:', widgetErr);
     }
     await signOut(auth);
+  },
+
+  /**
+   * Complete account deletion and cleanup workflow.
+   * Releases username index, clears widget data, deletes user profile,
+   * and terminates the Firebase Auth user.
+   */
+  async deleteAccount(): Promise<void> {
+    if (!auth.currentUser) throw new Error('Not authenticated');
+    const user = auth.currentUser;
+    const uid = user.uid;
+
+    try {
+      // 1. Fetch user profile to retrieve and free username reservation
+      const userRef = doc(db, 'users', uid);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+        const username = userSnap.data()?.username;
+        if (username) {
+          await deleteDoc(doc(db, 'usernames', username)).catch(() => {});
+        }
+      }
+
+      // 2. Clear widget data
+      await widgetService.clearWidgetOnLogout().catch(() => {});
+
+      // 3. Delete user document from Firestore
+      await deleteDoc(userRef).catch(() => {});
+
+      // 4. Delete Firebase Auth user record
+      await user.delete();
+    } catch (err: any) {
+      console.warn('Account deletion error:', err);
+      throw err;
+    }
   },
 };

@@ -121,43 +121,12 @@ export const friendService = {
 
   /**
    * Accepts an incoming friend request and creates the mutual friendship document.
-   * Uses server-authoritative Cloud Function to validate pending state, ownership,
-   * and provisioning atomically.
+   * Strictly server-authoritative via Cloud Function to ensure genuine recipient acceptance
+   * and prevent any unauthorized client friendship provisioning.
    */
-  async acceptFriendRequest(request: FriendRequest, currentUser: { displayName: string; username: string }): Promise<void> {
-    try {
-      const callable = httpsCallable(cloudFunctions, 'acceptFriendRequest');
-      await callable({ requestId: request.id });
-    } catch (callableErr) {
-      console.warn('Backend acceptFriendRequest callable notice (fallback to direct transaction):', callableErr);
-      // Fallback: direct write
-      const reqRef = doc(db, 'friendRequests', request.id);
-      await setDoc(reqRef, { status: 'accepted', updatedAt: serverTimestamp() }, { merge: true });
-
-      const sorted = [request.fromUid, request.toUid].sort();
-      const friendshipId = `${sorted[0]}_${sorted[1]}`;
-      const friendshipRef = doc(db, 'friendships', friendshipId);
-
-      await setDoc(friendshipRef, {
-        id: friendshipId,
-        participantUids: [request.fromUid, request.toUid],
-        participantData: {
-          [request.fromUid]: {
-            displayName: request.fromDisplayName,
-            username: request.fromUsername,
-            avatarUrl: null,
-          },
-          [request.toUid]: {
-            displayName: currentUser.displayName,
-            username: currentUser.username,
-            avatarUrl: null,
-          },
-        },
-        activeStreakCount: 0,
-        establishedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
+  async acceptFriendRequest(request: FriendRequest, _currentUser?: { displayName: string; username: string }): Promise<void> {
+    const callable = httpsCallable(cloudFunctions, 'acceptFriendRequest');
+    await callable({ requestId: request.id });
   },
 
   /**
