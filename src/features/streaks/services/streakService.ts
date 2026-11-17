@@ -3,7 +3,6 @@ import {
   doc,
   addDoc,
   setDoc,
-  deleteDoc,
   getDoc,
   getDocs,
   onSnapshot,
@@ -316,16 +315,10 @@ export const streakService = {
   /**
    * Deletes a streak permanently via server-authoritative cascading deletion Cloud Function.
    * Recursively deletes check-in receipts, history logs, and related nudges before removing the streak.
+   * Client fallback direct-deletion is strictly removed to prevent orphaned records.
    */
   async deleteStreak(streakId: string): Promise<void> {
-    try {
-      const callable = httpsCallable(cloudFunctions, 'deleteStreak');
-      await callable({ streakId });
-    } catch (err) {
-      console.warn('Backend deleteStreak callable notice:', err);
-      // Fallback: direct delete of parent document if callable unavailable
-      const streakRef = doc(db, 'streaks', streakId);
-      await deleteDoc(streakRef);
-    }
+    const callable = httpsCallable(cloudFunctions, 'deleteStreak');
+    await callable({ streakId });
   },
 };

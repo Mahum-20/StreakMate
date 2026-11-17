@@ -10,8 +10,9 @@ import {
   signInWithCredential,
   User,
 } from 'firebase/auth';
-import { doc, getDoc, updateDoc, setDoc, deleteDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '@/core/config/firebase';
+import { doc, getDoc, updateDoc, setDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { auth, db, cloudFunctions } from '@/core/config/firebase';
 import { widgetService } from '@/features/widget/widgetService';
 
 let GoogleSignin: any = null;
@@ -296,36 +297,24 @@ export const authService = {
   },
 
   /**
-   * Complete account deletion and cleanup workflow.
-   * Releases username index, clears widget data, deletes user profile,
-   * and terminates the Firebase Auth user.
+   * Complete server-authoritative account deletion and cascading cleanup workflow.
+   * Cascades through friend requests, mutual friendships, streaks, nudges,
+   * username reservations, device tokens, and terminates the Firebase Auth user.
    */
   async deleteAccount(): Promise<void> {
     if (!auth.currentUser) throw new Error('Not authenticated');
-    const user = auth.currentUser;
-    const uid = user.uid;
 
     try {
-      // 1. Fetch user profile to retrieve and free username reservation
-      const userRef = doc(db, 'users', uid);
-      const userSnap = await getDoc(userRef);
-      if (userSnap.exists()) {
-        const username = userSnap.data()?.username;
-        if (username) {
-          await deleteDoc(doc(db, 'usernames', username)).catch(() => {});
-        }
-      }
+      const callable = httpsCallable(cloudFunctions, 'deleteUserAccount');
+      await callable();
 
-      // 2. Clear widget data
+      // Clear local widget storage
       await widgetService.clearWidgetOnLogout().catch(() => {});
 
-      // 3. Delete user document from Firestore
-      await deleteDoc(userRef).catch(() => {});
-
-      // 4. Delete Firebase Auth user record
-      await user.delete();
+      // Sign out local auth state
+      await signOut(auth).catch(() => {});
     } catch (err: any) {
-      console.warn('Account deletion error:', err);
+      console.warn('Authoritative account deletion error:', err);
       throw err;
     }
   },

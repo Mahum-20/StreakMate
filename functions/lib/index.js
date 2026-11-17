@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.acceptFriendRequest = exports.sendNudge = exports.monitorStreakExpirations = exports.deleteStreak = exports.submitCheckIn = void 0;
+exports.deleteUserAccount = exports.acceptFriendRequest = exports.sendNudge = exports.monitorStreakExpirations = exports.deleteStreak = exports.submitCheckIn = void 0;
 const admin = require("firebase-admin");
 admin.initializeApp();
 var checkIn_1 = require("./streaks/checkIn");
@@ -13,4 +13,6 @@ var sendNudge_1 = require("./social/sendNudge");
 Object.defineProperty(exports, "sendNudge", { enumerable: true, get: function () { return sendNudge_1.sendNudge; } });
 var acceptFriendRequest_1 = require("./social/acceptFriendRequest");
 Object.defineProperty(exports, "acceptFriendRequest", { enumerable: true, get: function () { return acceptFriendRequest_1.acceptFriendRequest; } });
+var deleteAccount_1 = require("./users/deleteAccount");
+Object.defineProperty(exports, "deleteUserAccount", { enumerable: true, get: function () { return deleteAccount_1.deleteUserAccount; } });
 //# sourceMappingURL=index.js.map

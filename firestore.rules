@@ -83,17 +83,29 @@ service cloud.firestore {
       );
 
       // Create: must be from current user to a distinct recipient with 'pending' status
+      // Anti-spam: enforce deterministic request ID matching fromUid_toUid and prevent duplicate requests
       allow create: if isAuthenticated()
+        && requestId == request.auth.uid + '_' + request.resource.data.toUid
+        && request.resource.data.id == requestId
         && request.resource.data.fromUid == request.auth.uid
         && request.resource.data.toUid != request.auth.uid
-        && request.resource.data.status == 'pending';
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly([
+          'id', 'fromUid', 'toUid', 'fromDisplayName', 'fromUsername', 'status', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.fromDisplayName is string
+        && request.resource.data.fromUsername is string
+        && !exists(/databases/$(database)/documents/friendships/$(request.auth.uid + '_' + request.resource.data.toUid))
+        && !exists(/databases/$(database)/documents/friendships/$(request.resource.data.toUid + '_' + request.auth.uid));
 
       // Update: strictly validated state machine
+      // Recipient can reject; sender can cancel.
+      // Acceptance is strictly prohibited from client writes and must go through acceptFriendRequest Cloud Function!
       allow update: if isAuthenticated()
         && resource.data.status == 'pending'
         && (
-          // Recipient can accept or reject
-          (resource.data.toUid == request.auth.uid && request.resource.data.status in ['accepted', 'rejected']) ||
+          // Recipient can only reject
+          (resource.data.toUid == request.auth.uid && request.resource.data.status == 'rejected') ||
           // Sender can cancel while pending
           (resource.data.fromUid == request.auth.uid && request.resource.data.status == 'cancelled')
         )
@@ -181,8 +193,10 @@ service cloud.firestore {
         // Valid status values that a client can set (pause / resume only)
         && request.resource.data.status in ['active', 'paused'];
 
-      // Deletion: strictly limited to the streak creator
-      allow delete: if isAuthenticated() && resource.data.creatorUid == request.auth.uid;
+      // Deletion from client: STRICTLY DISABLED.
+      // Streaks must be deleted exclusively via the server-authoritative deleteStreak Cloud Function
+      // to guarantee cascading removal of all subcollections (checkIns, history) and related nudges.
+      allow delete: if false;
 
       // Subcollection: Check-in receipts (Client READ-ONLY; writes strictly reserved to Cloud Functions)
       match /checkIns/{checkInId} {

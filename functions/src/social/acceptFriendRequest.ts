@@ -43,8 +43,29 @@ export const acceptFriendRequest = functions.https.onCall(async (data, context) 
       );
     }
 
+    fromUid = reqData.fromUid;
+    const sorted = [fromUid, uid].sort();
+    const friendshipId = `${sorted[0]}_${sorted[1]}`;
+    const friendshipRef = db.collection('friendships').doc(friendshipId);
+
+    // If already marked accepted, guarantee that the mutual friendship document actually exists
     if (reqData.status === 'accepted') {
-      return; // Already accepted (idempotent)
+      const friendshipSnap = await transaction.get(friendshipRef);
+      if (!friendshipSnap.exists) {
+        // Self-heal missing friendship document
+        transaction.set(
+          friendshipRef,
+          {
+            id: friendshipId,
+            participantUids: [sorted[0], sorted[1]],
+            activeStreakCount: 0,
+            establishedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+      return; // Already processed and verified
     }
 
     if (reqData.status !== 'pending') {
@@ -54,8 +75,6 @@ export const acceptFriendRequest = functions.https.onCall(async (data, context) 
       );
     }
 
-    fromUid = reqData.fromUid;
-
     // Mark friend request as accepted
     transaction.update(requestRef, {
       status: 'accepted',
@@ -63,10 +82,6 @@ export const acceptFriendRequest = functions.https.onCall(async (data, context) 
     });
 
     // Create mutual friendship with deterministic sorted ID
-    const sorted = [fromUid, uid].sort();
-    const friendshipId = `${sorted[0]}_${sorted[1]}`;
-    const friendshipRef = db.collection('friendships').doc(friendshipId);
-
     transaction.set(
       friendshipRef,
       {
