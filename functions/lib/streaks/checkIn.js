@@ -18,6 +18,7 @@ exports.submitCheckIn = functions.https.onCall(async (data, context) => {
     const streakRef = db.collection('streaks').doc(streakId);
     let updatedStreakCount = 0;
     let allCompleted = false;
+    let isNewlyCompleted = false;
     let streakName = '';
     let participantUids = [];
     let earnedMilestoneFreeze = false;
@@ -33,7 +34,7 @@ exports.submitCheckIn = functions.https.onCall(async (data, context) => {
         if (!participantUids.includes(uid)) {
             throw new functions.https.HttpsError('permission-denied', 'You are not a participant in this streak.');
         }
-        if (streakData.status === 'broken' || streakData.status === 'paused') {
+        if (streakData.status === 'broken' || streakData.status === 'paused' || streakData.status === 'deleting') {
             throw new functions.https.HttpsError('failed-precondition', `Cannot check in to a ${streakData.status} streak.`);
         }
         const now = new Date();
@@ -56,11 +57,14 @@ exports.submitCheckIn = functions.https.onCall(async (data, context) => {
             updatedStreakCount = baseStreak;
             allCompleted = participantUids.every((p) => currentCheckIns.includes(p));
             finalFreezes = currentFreezes;
+            isNewlyCompleted = false;
             return;
         }
         // 3. Register user check-in
+        const wasAlreadyCompleted = participantUids.length > 0 && participantUids.every((p) => currentCheckIns.includes(p));
         const newCheckIns = [...currentCheckIns, uid];
         allCompleted = participantUids.length > 0 && participantUids.every((p) => newCheckIns.includes(p));
+        isNewlyCompleted = allCompleted && !wasAlreadyCompleted;
         const nextStreak = allCompleted ? baseStreak + 1 : baseStreak;
         const longestStreak = Math.max(streakData.longestStreak || 0, nextStreak);
         updatedStreakCount = nextStreak;
@@ -105,8 +109,9 @@ exports.submitCheckIn = functions.https.onCall(async (data, context) => {
             });
         }
     });
-    // If streak was saved today, dispatch celebratory notification to participants
-    if (allCompleted) {
+    // If streak was newly saved today by this check-in, dispatch celebratory notification to participants
+    // Eliminates duplicate push notifications on idempotent check-in retries
+    if (isNewlyCompleted) {
         for (const participant of participantUids) {
             await (0, fcmDispatcher_1.sendStreakNotification)({
                 streakId,

@@ -42,6 +42,12 @@ export const deleteStreak = functions.https.onCall(async (data, context) => {
     );
   }
 
+  // Set status to 'deleting' immediately to block concurrent check-ins, nudges, and monitor jobs
+  await streakRef.update({
+    status: 'deleting',
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
   // Helper: batch delete a query in chunks of up to 400 docs
   const deleteQueryBatch = async (query: admin.firestore.Query): Promise<void> => {
     while (true) {

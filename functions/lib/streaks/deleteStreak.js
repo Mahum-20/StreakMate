@@ -29,6 +29,11 @@ exports.deleteStreak = functions.https.onCall(async (data, context) => {
     if (creatorUid !== uid && !participantUids.includes(uid)) {
         throw new functions.https.HttpsError('permission-denied', 'You do not have permission to delete this streak.');
     }
+    // Set status to 'deleting' immediately to block concurrent check-ins, nudges, and monitor jobs
+    await streakRef.update({
+        status: 'deleting',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     // Helper: batch delete a query in chunks of up to 400 docs
     const deleteQueryBatch = async (query) => {
         while (true) {

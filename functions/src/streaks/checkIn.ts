@@ -30,6 +30,7 @@ export const submitCheckIn = functions.https.onCall(async (data, context) => {
 
   let updatedStreakCount = 0;
   let allCompleted = false;
+  let isNewlyCompleted = false;
   let streakName = '';
   let participantUids: string[] = [];
   let earnedMilestoneFreeze = false;
@@ -52,7 +53,7 @@ export const submitCheckIn = functions.https.onCall(async (data, context) => {
       );
     }
 
-    if (streakData.status === 'broken' || streakData.status === 'paused') {
+    if (streakData.status === 'broken' || streakData.status === 'paused' || streakData.status === 'deleting') {
       throw new functions.https.HttpsError(
         'failed-precondition',
         `Cannot check in to a ${streakData.status} streak.`
@@ -91,12 +92,16 @@ export const submitCheckIn = functions.https.onCall(async (data, context) => {
       updatedStreakCount = baseStreak;
       allCompleted = participantUids.every((p) => currentCheckIns.includes(p));
       finalFreezes = currentFreezes;
+      isNewlyCompleted = false;
       return;
     }
 
     // 3. Register user check-in
+    const wasAlreadyCompleted = participantUids.length > 0 && participantUids.every((p) => currentCheckIns.includes(p));
     const newCheckIns = [...currentCheckIns, uid];
     allCompleted = participantUids.length > 0 && participantUids.every((p) => newCheckIns.includes(p));
+    isNewlyCompleted = allCompleted && !wasAlreadyCompleted;
+
     const nextStreak = allCompleted ? baseStreak + 1 : baseStreak;
     const longestStreak = Math.max(streakData.longestStreak || 0, nextStreak);
     updatedStreakCount = nextStreak;
@@ -146,8 +151,9 @@ export const submitCheckIn = functions.https.onCall(async (data, context) => {
     }
   });
 
-  // If streak was saved today, dispatch celebratory notification to participants
-  if (allCompleted) {
+  // If streak was newly saved today by this check-in, dispatch celebratory notification to participants
+  // Eliminates duplicate push notifications on idempotent check-in retries
+  if (isNewlyCompleted) {
     for (const participant of participantUids) {
       await sendStreakNotification({
         streakId,

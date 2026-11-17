@@ -46,7 +46,24 @@ export const monitorStreakExpirations = functions.pubsub
           if (!freshDoc.exists) return;
           const fresh = freshDoc.data()!;
 
-          // Idempotency: Re-validate expiration state inside transaction
+          // Strict revalidation inside transaction to prevent race conditions:
+          // 1. Status must still be candidate for expiration (active/awaiting/at_risk/frozen)
+          if (!['active', 'awaiting_checkin', 'at_risk', 'frozen'].includes(fresh.status)) {
+            return;
+          }
+
+          // 2. The periodKey must still match the period that triggered this monitor evaluation
+          if (fresh.currentPeriodKey !== periodKey) {
+            return;
+          }
+
+          // 3. The deadline must still be passed against fresh server data
+          const freshEnd = fresh.currentPeriodEnd as admin.firestore.Timestamp | undefined;
+          if (!freshEnd || freshEnd.toMillis() > nowMillis) {
+            return;
+          }
+
+          // 4. Idempotency: Re-validate expiration state inside transaction
           if (fresh.lastExpiredPeriodKey === periodKey) {
             return;
           }

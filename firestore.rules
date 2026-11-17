@@ -24,7 +24,26 @@ service cloud.firestore {
     // ===============================================================
     match /users/{userId} {
       // Strictly owner-only access to prevent unauthorized email and profile scraping
-      allow read, write: if isOwner(userId);
+      allow read: if isOwner(userId);
+
+      // Profile creation: owner only, must match uid, stats initialized to zero
+      allow create: if isOwner(userId)
+        && request.resource.data.uid == userId
+        && request.resource.data.email is string
+        && request.resource.data.username is string;
+
+      // Profile updates from client: strictly limited to safe presentation fields
+      // Prevents client tampering with stats, email, username, or uid!
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'avatarUrl', 'timezone', 'updatedAt'
+        ])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.username == resource.data.username
+        && (!('stats' in resource.data) || request.resource.data.stats == resource.data.stats);
+
+      allow delete: if isOwner(userId);
 
       match /deviceTokens/{tokenId} {
         allow read, write: if isOwner(userId);
@@ -93,11 +112,15 @@ service cloud.firestore {
       // Only the two mutual participants can read their friendship
       allow read: if isAuthenticated() && request.auth.uid in resource.data.participantUids;
 
-      // Creation: must consist of exactly 2 distinct users, with the creator being one of them
+      // Creation from client: must have deterministic ID and recipient must be authenticated
       allow create: if isAuthenticated()
         && request.resource.data.participantUids.size() == 2
         && request.auth.uid in request.resource.data.participantUids
-        && request.resource.data.participantUids[0] != request.resource.data.participantUids[1];
+        && request.resource.data.participantUids[0] != request.resource.data.participantUids[1]
+        && (
+          friendshipId == request.resource.data.participantUids[0] + '_' + request.resource.data.participantUids[1] ||
+          friendshipId == request.resource.data.participantUids[1] + '_' + request.resource.data.participantUids[0]
+        );
 
       // Update: participants cannot be mutated; only activity/metadata can update
       allow update: if isAuthenticated()
@@ -115,7 +138,8 @@ service cloud.firestore {
       // Only participating users can view the streak
       allow read: if isAuthenticated() && request.auth.uid in resource.data.participantUids;
 
-      // Streak creation: creator must be signed-in, included in participants, and start with 0 streak
+      // Streak creation: creator must be signed-in, included in participants, and start with 0 streak.
+      // Partner streaks require verified mutual friendship to prevent unconsenting additions.
       allow create: if isAuthenticated()
         && request.resource.data.creatorUid == request.auth.uid
         && request.auth.uid in request.resource.data.participantUids
@@ -124,14 +148,21 @@ service cloud.firestore {
         && request.resource.data.status == 'active'
         && (
           (request.resource.data.isSolo == true && request.resource.data.participantUids.size() == 1) ||
-          (request.resource.data.isSolo == false && request.resource.data.participantUids.size() == 2)
+          (
+            request.resource.data.isSolo == false
+            && request.resource.data.participantUids.size() == 2
+            && (
+              exists(/databases/$(database)/documents/friendships/$(request.resource.data.participantUids[0] + '_' + request.resource.data.participantUids[1])) ||
+              exists(/databases/$(database)/documents/friendships/$(request.resource.data.participantUids[1] + '_' + request.resource.data.participantUids[0]))
+            )
+          )
         );
 
       // Updating streak from client: strictly locked down to user-controlled metadata
-      // (status pause/resume, reminderLeadHours, nudge fields).
+      // (status pause/resume, reminderLeadHours, lastNudgeDismissed).
       // Authoritative streak counters (currentStreak, longestStreak, freezesRemaining,
-      // currentPeriodCheckIns, currentPeriodKey, currentPeriodEnd) can ONLY be mutated
-      // by the authoritative Cloud Function via Admin SDK!
+      // currentPeriodCheckIns, currentPeriodKey, currentPeriodEnd) and nudge initiation
+      // can ONLY be mutated by authoritative Cloud Functions via Admin SDK!
       allow update: if isAuthenticated()
         && request.auth.uid in resource.data.participantUids
         // Core immutable security invariants:
@@ -145,10 +176,9 @@ service cloud.firestore {
         && request.resource.data.currentPeriodCheckIns == resource.data.currentPeriodCheckIns
         && request.resource.data.currentPeriodKey == resource.data.currentPeriodKey
         && request.resource.data.currentPeriodEnd == resource.data.currentPeriodEnd
-        // Constrain client-modifiable keys:
+        // Constrain client-modifiable keys (nudge authoring locked to Cloud Functions):
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'updatedAt', 'reminderLeadHours',
-          'lastNudgeAt', 'lastNudgeBy', 'lastNudgePhrase', 'lastNudgeDismissed'
+          'status', 'updatedAt', 'reminderLeadHours', 'lastNudgeDismissed'
         ])
         // Valid status values that a client can set (pause / resume only)
         && request.resource.data.status in ['active', 'paused'];
@@ -182,16 +212,13 @@ service cloud.firestore {
         resource.data.toUid == request.auth.uid
       );
 
-      // Create: sender must be authenticated user, recipient must be distinct
-      allow create: if isAuthenticated()
-        && request.resource.data.fromUid == request.auth.uid
-        && request.resource.data.toUid != request.auth.uid
-        && request.resource.data.read == false;
+      // Creation: strictly reserved to server Cloud Function sendNudge to prevent spoofing
+      allow create: if false;
 
       // Update: only recipient can mark as read
       allow update: if isAuthenticated()
         && resource.data.toUid == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
 
       // Delete: sender or recipient
       allow delete: if isAuthenticated() && (

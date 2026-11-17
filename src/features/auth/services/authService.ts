@@ -70,6 +70,8 @@ export const getAuthErrorMessage = (errorCode: string, rawMessage?: string): str
 export const authService = {
   async login(email: string, password: string) {
     const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+    // Automatic recovery for incomplete registrations: guarantee Firestore profile and username exist
+    await this.syncUserToFirestore(cred.user);
     return cred.user;
   },
 

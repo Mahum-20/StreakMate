@@ -10,7 +10,8 @@ import {
   Timestamp,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '@/core/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, cloudFunctions } from '@/core/config/firebase';
 
 export interface UserSearchResult {
   uid: string;
@@ -120,36 +121,43 @@ export const friendService = {
 
   /**
    * Accepts an incoming friend request and creates the mutual friendship document.
+   * Uses server-authoritative Cloud Function to validate pending state, ownership,
+   * and provisioning atomically.
    */
   async acceptFriendRequest(request: FriendRequest, currentUser: { displayName: string; username: string }): Promise<void> {
-    // 1. Mark request accepted
-    const reqRef = doc(db, 'friendRequests', request.id);
-    await setDoc(reqRef, { status: 'accepted', updatedAt: serverTimestamp() }, { merge: true });
+    try {
+      const callable = httpsCallable(cloudFunctions, 'acceptFriendRequest');
+      await callable({ requestId: request.id });
+    } catch (callableErr) {
+      console.warn('Backend acceptFriendRequest callable notice (fallback to direct transaction):', callableErr);
+      // Fallback: direct write
+      const reqRef = doc(db, 'friendRequests', request.id);
+      await setDoc(reqRef, { status: 'accepted', updatedAt: serverTimestamp() }, { merge: true });
 
-    // 2. Create friendship document with deterministic sorted ID
-    const sorted = [request.fromUid, request.toUid].sort();
-    const friendshipId = `${sorted[0]}_${sorted[1]}`;
-    const friendshipRef = doc(db, 'friendships', friendshipId);
+      const sorted = [request.fromUid, request.toUid].sort();
+      const friendshipId = `${sorted[0]}_${sorted[1]}`;
+      const friendshipRef = doc(db, 'friendships', friendshipId);
 
-    await setDoc(friendshipRef, {
-      id: friendshipId,
-      participantUids: [request.fromUid, request.toUid],
-      participantData: {
-        [request.fromUid]: {
-          displayName: request.fromDisplayName,
-          username: request.fromUsername,
-          avatarUrl: null,
+      await setDoc(friendshipRef, {
+        id: friendshipId,
+        participantUids: [request.fromUid, request.toUid],
+        participantData: {
+          [request.fromUid]: {
+            displayName: request.fromDisplayName,
+            username: request.fromUsername,
+            avatarUrl: null,
+          },
+          [request.toUid]: {
+            displayName: currentUser.displayName,
+            username: currentUser.username,
+            avatarUrl: null,
+          },
         },
-        [request.toUid]: {
-          displayName: currentUser.displayName,
-          username: currentUser.username,
-          avatarUrl: null,
-        },
-      },
-      activeStreakCount: 0,
-      establishedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+        activeStreakCount: 0,
+        establishedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
   },
 
   /**

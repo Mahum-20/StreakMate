@@ -1,7 +1,6 @@
 import {
   collection,
   doc,
-  addDoc,
   updateDoc,
   onSnapshot,
   query,
@@ -10,7 +9,8 @@ import {
   Timestamp,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db } from '@/core/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, cloudFunctions } from '@/core/config/firebase';
 import { getRandomNudgePhrase } from '@/core/constants/nudgePhrases';
 
 export interface NudgeRecord {
@@ -39,47 +39,24 @@ export interface SendNudgeParams {
 export const nudgeService = {
   /**
    * Sends an entertaining Duolingo-style nudge to an accountability partner.
-   * Updates the shared streak document (authoritative, guaranteed permissions)
-   * and optionally logs to the nudges collection for persistence.
+   * Delegates to the server-authoritative Cloud Function to enforce rate limits,
+   * participant verification, and real-time push dispatch.
    */
   async sendNudge(params: SendNudgeParams): Promise<{ id: string; phrase: string }> {
     const chosenPhrase = params.customPhrase || getRandomNudgePhrase(params.toName, params.streakName).phrase;
-    let nudgeId = `streak_${params.streakId}_${Date.now()}`;
 
-    // 1. Authoritative write: update the streak document where both partners have participant permissions
     try {
-      const streakRef = doc(db, 'streaks', params.streakId);
-      await updateDoc(streakRef, {
-        lastNudgeAt: serverTimestamp(),
-        lastNudgeBy: params.fromUid,
-        lastNudgePhrase: chosenPhrase,
-        lastNudgeDismissed: false,
-      });
-    } catch (err: any) {
-      console.warn('Notice updating streak lastNudgeAt:', err);
-    }
-
-    // 2. Optionally record in standalone nudges collection if rules are deployed on remote project
-    try {
-      const nudgesRef = collection(db, 'nudges');
-      const docRef = await addDoc(nudgesRef, {
+      const callable = httpsCallable(cloudFunctions, 'sendNudge');
+      const result = await callable({
         streakId: params.streakId,
-        streakName: params.streakName,
-        fromUid: params.fromUid,
-        fromName: params.fromName,
-        toUid: params.toUid,
-        toName: params.toName,
-        phrase: chosenPhrase,
-        read: false,
-        createdAt: serverTimestamp(),
+        customPhrase: chosenPhrase,
       });
-      nudgeId = docRef.id;
-    } catch (nudgeErr) {
-      // Graceful fallback: streak document update already guarantees delivery
-      console.warn('Standalone nudges collection write notice (fallback to streak document):', nudgeErr);
+      const data = result.data as any;
+      return { id: `streak_${params.streakId}_${Date.now()}`, phrase: data.phrase || chosenPhrase };
+    } catch (err: any) {
+      console.warn('sendNudge callable error:', err);
+      throw err;
     }
-
-    return { id: nudgeId, phrase: chosenPhrase };
   },
 
   /**
