@@ -21,6 +21,7 @@ exports.acceptFriendRequest = functions.https.onCall(async (data, context) => {
     const db = admin.firestore();
     const requestRef = db.collection('friendRequests').doc(requestId);
     let fromUid = '';
+    let isNewlyAccepted = false;
     await db.runTransaction(async (transaction) => {
         const reqSnap = await transaction.get(requestRef);
         if (!reqSnap.exists) {
@@ -47,11 +48,13 @@ exports.acceptFriendRequest = functions.https.onCall(async (data, context) => {
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 }, { merge: true });
             }
-            return; // Already processed and verified
+            isNewlyAccepted = false;
+            return; // Already processed and verified (idempotent, do not resend notification)
         }
         if (reqData.status !== 'pending') {
             throw new functions.https.HttpsError('failed-precondition', `Cannot accept a friend request with status "${reqData.status}".`);
         }
+        isNewlyAccepted = true;
         // Mark friend request as accepted
         transaction.update(requestRef, {
             status: 'accepted',
@@ -66,7 +69,8 @@ exports.acceptFriendRequest = functions.https.onCall(async (data, context) => {
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
     });
-    if (fromUid) {
+    // Idempotency: only send notification on the genuine state transition from pending to accepted
+    if (isNewlyAccepted && fromUid) {
         await (0, fcmDispatcher_1.sendStreakNotification)({
             streakId: '',
             streakName: 'StreakMate Friends',

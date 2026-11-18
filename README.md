@@ -27,7 +27,7 @@
 - **Backend & Database**: [Firebase](https://firebase.google.com/) (Auth, Cloud Firestore & Atomic Transactions)
 - **State Management**: [Zustand](https://github.com/pmndrs/zustand) & [TanStack Query](https://tanstack.com/query)
 - **Native Android Widget**: Custom Kotlin `AppWidgetProvider` & Expo Config Plugin (`withAndroidWidget.js`)
-- **Language & Testing**: TypeScript & Jest (28 lifecycle unit tests)
+- **Language & Testing**: TypeScript & Jest (42 lifecycle, security & concurrency unit tests)
 
 ---
 
@@ -77,7 +77,7 @@ StreakMate enforces strict code quality and mathematical correctness:
 # Run TypeScript strict type-check (0 errors)
 npx tsc --noEmit
 
-# Run Unit Test suite (28/28 tests passing)
+# Run Unit Test suite (42/42 tests passing across 2 test suites)
 npm test
 ```
 

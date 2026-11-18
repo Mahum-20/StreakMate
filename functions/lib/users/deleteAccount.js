@@ -41,7 +41,10 @@ exports.deleteUserAccount = functions.https.onCall(async (_data, context) => {
                 break;
         }
     };
-    // 1. Mark account state as deleting for auditing and recovery
+    // 1. Immediately revoke tokens and disable Auth user to block all concurrent client actions
+    await admin.auth().revokeRefreshTokens(uid).catch(() => { });
+    await admin.auth().updateUser(uid, { disabled: true }).catch(() => { });
+    // 2. Mark account state as deleting for auditing and recovery
     await userRef.set({
         status: 'deleting',
         deletionJob: {
@@ -52,15 +55,15 @@ exports.deleteUserAccount = functions.https.onCall(async (_data, context) => {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
     try {
-        // 2. Delete user subcollections
+        // 3. Delete user subcollections
         await deleteQueryBatch(userRef.collection('deviceTokens'));
         await deleteQueryBatch(userRef.collection('notificationPreferences'));
-        // 3. Delete friend requests (both sent and received)
+        // 4. Delete friend requests (both sent and received)
         await deleteQueryBatch(db.collection('friendRequests').where('fromUid', '==', uid));
         await deleteQueryBatch(db.collection('friendRequests').where('toUid', '==', uid));
-        // 4. Delete friendships
+        // 5. Delete friendships
         await deleteQueryBatch(db.collection('friendships').where('participantUids', 'array-contains', uid));
-        // 5. Handle streaks involving the user
+        // 6. Handle streaks involving the user
         const userStreaksSnap = await db
             .collection('streaks')
             .where('participantUids', 'array-contains', uid)
@@ -77,12 +80,18 @@ exports.deleteUserAccount = functions.https.onCall(async (_data, context) => {
                 await streakDoc.ref.delete();
             }
             else {
-                // Shared partner streak: archive/break gracefully and notify partner
+                // Shared partner streak: archive/break gracefully, anonymize user, and notify partner
                 const partnerUid = pUids.find((id) => id !== uid);
+                const updatedNames = { ...(sData.participantNames || {}) };
+                const updatedAvatars = { ...(sData.participantAvatars || {}) };
+                updatedNames[uid] = 'Former Member';
+                updatedAvatars[uid] = null;
                 await streakDoc.ref.update({
                     status: 'broken',
                     partnerLeft: true,
                     partnerLeftUid: uid,
+                    participantNames: updatedNames,
+                    participantAvatars: updatedAvatars,
                     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
                 if (partnerUid) {
@@ -96,16 +105,22 @@ exports.deleteUserAccount = functions.https.onCall(async (_data, context) => {
                 }
             }
         }
-        // 6. Delete nudges involving the user
+        // 7. Delete nudges involving the user
         await deleteQueryBatch(db.collection('nudges').where('fromUid', '==', uid));
         await deleteQueryBatch(db.collection('nudges').where('toUid', '==', uid));
-        // 7. Release username reservation
+        // 8. Delete notification outbox records targeting the user
+        await deleteQueryBatch(db.collection('notificationOutbox').where('targetUids', 'array-contains', uid));
+        // 9. Release username reservation (verifiable without silent ignore)
         if (username) {
-            await db.collection('usernames').doc(username).delete().catch(() => { });
+            const usernameRef = db.collection('usernames').doc(username);
+            const uSnap = await usernameRef.get();
+            if (uSnap.exists && uSnap.data()?.uid === uid) {
+                await usernameRef.delete();
+            }
         }
-        // 8. Delete user profile document
+        // 10. Delete user profile document
         await userRef.delete();
-        // 9. Delete Firebase Auth user record
+        // 11. Delete Firebase Auth user record
         await admin.auth().deleteUser(uid);
         return { success: true };
     }

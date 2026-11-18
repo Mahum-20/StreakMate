@@ -189,30 +189,28 @@ export const monitorStreakExpirations = functions.pubsub
 
       for (const docSnap of pendingOutboxSnap.docs) {
         const item = docSnap.data() as OutboxRecord;
-        if (item.status === 'processing') {
-          const lease = item.leaseExpiresAt;
-          if (lease && lease.toMillis() > nowMillis) {
-            continue; // Active lease held by another instance
-          }
-        }
-        if (item.attempts >= 3) {
-          await docSnap.ref.update({ status: 'failed', updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-          continue;
-        }
+        const allRecipientUids = Object.keys(item.recipients || {});
 
-        const pendingUids = Object.keys(item.recipients || {}).filter(
-          (u) => !item.recipients[u]?.delivered
-        );
-        if (pendingUids.length > 0) {
+        // Atomically claim the retry in a transaction with fresh lease and attempt counter increment.
+        // Guarantees zero duplicate sends across concurrent scheduler workers and enforces the 3-attempt ceiling.
+        const claim = await claimOutboxRecord(db, item.id, {
+          streakId: item.streakId,
+          streakName: item.streakName,
+          periodKey: item.periodKey,
+          type: item.type,
+          title: item.title,
+          body: item.body,
+          targetUids: allRecipientUids,
+        });
+
+        if (claim.claimed && claim.targetUids.length > 0) {
           await executeOutboxDelivery(db, item.id, {
             streakId: item.streakId,
             streakName: item.streakName,
             title: item.title,
             body: item.body,
-            targetUids: pendingUids,
+            targetUids: claim.targetUids,
           });
-        } else {
-          await docSnap.ref.update({ status: 'delivered', deliveredAt: admin.firestore.FieldValue.serverTimestamp() });
         }
       }
     } catch (retryErr) {

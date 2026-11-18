@@ -40,12 +40,17 @@ async function sendStreakNotification(payload) {
     const response = await messaging.sendEachForMulticast(message);
     // Clean up invalid or stale tokens
     const failedTokens = [];
+    let transientError = null;
     response.responses.forEach((resp, index) => {
         if (!resp.success && resp.error) {
             const errCode = resp.error.code;
             if (errCode === 'messaging/invalid-registration-token' ||
                 errCode === 'messaging/registration-token-not-registered') {
                 failedTokens.push(tokens[index]);
+            }
+            else {
+                // Capture transient network / quota / server errors
+                transientError = resp.error;
             }
         }
     });
@@ -56,7 +61,12 @@ async function sendStreakNotification(payload) {
                 batch.delete(d.ref);
             }
         });
-        await batch.commit();
+        await batch.commit().catch((err) => console.warn('Device token cleanup warning:', err));
     }
+    // If all tokens failed, and failures include transient errors, throw so outbox retries!
+    if (response.successCount === 0 && transientError) {
+        throw new Error(`FCM delivery failure: ${transientError?.message || transientError?.code || 'Transient delivery error'}`);
+    }
+    return { success: true, deliveredCount: response.successCount };
 }
 //# sourceMappingURL=fcmDispatcher.js.map
